@@ -93,6 +93,7 @@ export const styles = StyleSheet.create({
   outlookDesc: { color: '#7f8792', fontSize: 11.5, marginTop: 3 },
   outlookTag: { color: '#4d92ff', fontSize: 11, fontWeight: '700' },
   primaryButton: { marginTop: 16, backgroundColor: '#2f80ff', borderRadius: 15, paddingVertical: 16, alignItems: 'center', shadowColor: '#2f80ff', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 3 },
+  primaryButtonDisabled: { backgroundColor: '#262b34', shadowOpacity: 0, elevation: 0 },
   primaryButtonText: { color: '#fff', fontSize: 16, fontWeight: '800' },
   ghostButton: { marginTop: 16, borderWidth: 1, borderColor: '#3a3f49', borderRadius: 15, paddingVertical: 14, alignItems: 'center' },
   ghostButtonText: { color: '#dfe3e9', fontSize: 15, fontWeight: '700' },

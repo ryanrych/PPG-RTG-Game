@@ -8,8 +8,7 @@ import {
   OPP_NAMES,
   SCHOOLS,
   NINE_PARS,
-  challengeAdjustment,
-  spotFromRankScore,
+  tryoutSpot,
   depthChartSeeding,
   DEPTH_CHART_MOVE_CLAMP,
   initialState,
@@ -541,8 +540,9 @@ export function useRoadToGloryGame() {
   }
 
   async function createSave() {
-    const name = (state.nameInput || '').trim() || 'Player';
     const hometown = (state.hometownInput || '').trim();
+    const name = (state.nameInput || '').trim();
+    if (!hometown || !name) return;
     const created = await createSaveFile(name);
     if (!created) return;
     setState((prev) => ({
@@ -665,18 +665,20 @@ export function useRoadToGloryGame() {
       return;
     }
 
-    // Step 2 — challenge-fail cut (risk schools only).
+    // Step 2 — challenge cut. At the elite programs the challenges are a gate
+    // rather than a bonus: miss one at a 5-star, two at a 4-star, and you're
+    // gone regardless of what you shot.
+    const challengeGate = cfg.cutThreshold != null;
     const failedCount = entries.filter((entry) => entry.val < entry.target).length;
-    if (item.risk && cfg.cutThreshold != null && failedCount >= cfg.cutThreshold) {
+    if (challengeGate && failedCount >= cfg.cutThreshold) {
       setState((prev) => ({ ...prev, screen: 'tryout', tryStep: 3, tryResult: { made: false, cut: true } }));
       return;
     }
 
-    // Step 3 — starting spot from the player's own numbers.
-    const strokesUnderBar = cfg.bar - score;
-    const challengeTotal = entries.reduce((sum, entry) => sum + challengeAdjustment(entry.val, entry.target), 0);
-    const rankScore = strokesUnderBar + challengeTotal;
-    const spot = spotFromRankScore(rankScore, item.roster);
+    // Step 3 — starting spot. Score does the work; at the programs where the
+    // challenges aren't a gate, each one you complete is worth half a spot.
+    const challengesMade = challengeGate ? 0 : entries.filter((entry) => entry.val >= entry.target).length;
+    const spot = tryoutSpot({ score, prestige: item.prestige, roster: item.roster, challengesMade });
 
     const r = rng(hash(`${item.id}mates`));
     const mates = [];
@@ -686,7 +688,7 @@ export function useRoadToGloryGame() {
       mates.push({ name: MATE_NAMES[k], str, cons });
     }
     const events = opponents(item).map(() => ({ done: false, result: null })).concat([{ done: false, result: null }]);
-    setState((prev) => ({ ...prev, screen: 'tryout', tryStep: 3, spot, teammates: mates, events, eventIndex: 0, exposureRaw: 0, tryResult: { made: true, spot, rankScore, total9: score } }));
+    setState((prev) => ({ ...prev, screen: 'tryout', tryStep: 3, spot, teammates: mates, events, eventIndex: 0, exposureRaw: 0, tryResult: { made: true, spot, challengesMade, total9: score } }));
   }
 
   function enterSeason() {
@@ -715,14 +717,14 @@ export function useRoadToGloryGame() {
     if (!isChamp) {
       const rv = opps[index];
       const pb = rv.course.pb9;
-      const oppTot = score9(pb, rv.str, rv.cons, r);
+      const oppTot = score9(pb, rv.str, rv.cons, r, school.team);
       const oppHoles = distribute(oppTot, [4, 5, 3, 4, 4, 3, 5, 4, 4], r);
-      const mateScores = state.teammates.map((mate) => score9(pb, mate.str, mate.cons, r));
+      const mateScores = state.teammates.map((mate) => score9(pb, mate.str, mate.cons, r, school.team));
       const oppTeam = [{ name: rv.golfer, toPar: oppTot, lead: true }];
       for (let k = 0; k < state.teammates.length; k += 1) {
         const ostr = Math.max(30, Math.min(99, Math.round(rv.str + gauss(r) * 6)));
         const ocons = Math.max(35, Math.min(95, Math.round(50 + ostr * 0.25 + gauss(r) * 14)));
-        oppTeam.push({ name: OPP_NAMES[k], toPar: score9(pb, ostr, ocons, r) });
+        oppTeam.push({ name: OPP_NAMES[k], toPar: score9(pb, ostr, ocons, r, school.team) });
       }
       setState((prev) => ({ ...prev, screen: 'event', ev: { idx: index, isChamp: false, pb, pars: [4, 5, 3, 4, 4, 3, 5, 4, 4], oppHoles, oppName: rv.golfer, oppSchool: rv.school, yourSchool: school.name, flagged: !!rv.flagged, playerHoles: [], holeIndex: 0, mateScores, oppTeam, courseName: rv.course.name }, curStrokes: [4, 5, 3, 4, 4, 3, 5, 4, 4][0] }));
     } else {
@@ -732,8 +734,8 @@ export function useRoadToGloryGame() {
       opps.forEach((rv) => field.push({ name: rv.golfer, str: rv.str, cons: rv.cons, you: false }));
       ['A. Whitfield', 'J. Castellano'].forEach((name, i) => field.push({ name, str: school.team + (i ? -4 : 4), cons: 60, you: false }));
       field.forEach((item) => {
-        const h1 = distribute(score9(pb, item.str, item.cons, r), [4, 5, 3, 4, 4, 3, 5, 4, 4], r);
-        const h2 = distribute(score9(pb, item.str, item.cons, r), [4, 5, 3, 4, 4, 3, 5, 4, 4], r);
+        const h1 = distribute(score9(pb, item.str, item.cons, r, school.team), [4, 5, 3, 4, 4, 3, 5, 4, 4], r);
+        const h2 = distribute(score9(pb, item.str, item.cons, r, school.team), [4, 5, 3, 4, 4, 3, 5, 4, 4], r);
         item.holes = h1.concat(h2);
       });
       setState((prev) => ({ ...prev, screen: 'event', ev: { idx: index, isChamp: true, pb, pars: [4, 5, 3, 4, 4, 3, 5, 4, 4, 4, 4, 3, 5, 4, 4, 3, 5, 4], field, playerHoles: [], holeIndex: 0, courseName: school.champ.course.name }, curStrokes: [4, 5, 3, 4, 4, 3, 5, 4, 4, 4, 4, 3, 5, 4, 4, 3, 5, 4][0] }));

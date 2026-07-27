@@ -5,7 +5,7 @@
 // Bump SEED_VERSION whenever the seed data in seed.js changes shape or
 // content; database.js re-seeds automatically when the stored version
 // doesn't match.
-export const SEED_VERSION = 2;
+export const SEED_VERSION = 3;
 
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS meta (

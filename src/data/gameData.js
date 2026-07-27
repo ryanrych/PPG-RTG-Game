@@ -1,5 +1,36 @@
 export const KHA = '#b8a860';
 
+// --- High school difficulty --------------------------------------------------
+// A school's star rating is the single driver of how hard its golf is, for
+// both the tryout and season play. `winning` is the window the low score of a
+// 9-hole event lands in: a 5-star event is won at -9 to -12, a 2-star at -4 to
+// -7, and the rest interpolate. `floor` is the bottom of that window and doubles
+// as the course's pb9 — score9 clamps there, so nobody in the field ever beats
+// it. An 18-hole championship is two independent 9-hole draws, so its winning
+// score runs to roughly double these numbers.
+export const PRESTIGE_DIFFICULTY = {
+  5: { floor: -12, winning: -9 },
+  4: { floor: -10, winning: -7 },
+  3: { floor: -9, winning: -6 },
+  2: { floor: -7, winning: -4 },
+  1: { floor: -5, winning: -2 },
+};
+
+// Strokes over the course floor that a golfer sitting exactly at their
+// program's `team` rating is expected to shoot. Everything else keys off this:
+// raise it and fields (and tryouts) get easier at every star level.
+export const FIELD_PAR_GAP = 5;
+
+// Strokes added per point of strength below the program's team rating. Spreads
+// the field out within a school without changing how hard the school itself is.
+export const STROKES_PER_STRENGTH_POINT = 0.25;
+
+// The tryout gate is what a typical player on that roster shoots — clear it and
+// you belong on the team; how far under it you go sets your starting spot.
+export function tryoutBar(prestige) {
+  return PRESTIGE_DIFFICULTY[prestige].floor + FIELD_PAR_GAP;
+}
+
 export const SCHOOLS = [
   {
     id: 'kingsley',
@@ -15,13 +46,14 @@ export const SCHOOLS = [
     home: {
       name: 'Sunset Shore',
       desc: 'Long holes, slick fairways, and a hard field. The least-forgiving track in the state.',
-      pb9: -5,
+      pb9: PRESTIGE_DIFFICULTY[5].floor,
     },
     team: 92,
     scout: 95,
     conf: 'Prep National League',
-    champ: { name: 'Prep National Championship', course: { name: 'Sunset Shore', pb9: -5 } },
-    tryout: { bar: -7, gir: 3, fair: 3, putt: 3, cutThreshold: 2 },
+    champ: { name: 'Prep National Championship', course: { name: 'Sunset Shore', pb9: PRESTIGE_DIFFICULTY[5].floor } },
+    // cutThreshold present = the challenges are a gate here, not a spot bonus.
+    tryout: { bar: tryoutBar(5), gir: 3, fair: 3, putt: 3, cutThreshold: 1 },
   },
   {
     id: 'staldous',
@@ -37,13 +69,13 @@ export const SCHOOLS = [
     home: {
       name: 'Triple Snake',
       desc: 'A hard course with tough wind, fast greens, demanding pins, and a strong field.',
-      pb9: -6,
+      pb9: PRESTIGE_DIFFICULTY[4].floor,
     },
     team: 80,
     scout: 75,
     conf: 'Cathedral League',
-    champ: { name: 'Cathedral League Championship', course: { name: 'Triple Snake', pb9: -6 } },
-    tryout: { bar: -6, gir: 2, fair: 2, putt: 2, cutThreshold: 3 },
+    champ: { name: 'Cathedral League Championship', course: { name: 'Triple Snake', pb9: PRESTIGE_DIFFICULTY[4].floor } },
+    tryout: { bar: tryoutBar(4), gir: 2, fair: 2, putt: 2, cutThreshold: 2 },
   },
   {
     id: 'riverbend',
@@ -59,13 +91,13 @@ export const SCHOOLS = [
     home: {
       name: 'Horseshoe Gorge',
       desc: 'Consistent winds and quick greens — an honest test that rewards a steady game.',
-      pb9: -7,
+      pb9: PRESTIGE_DIFFICULTY[3].floor,
     },
     team: 64,
     scout: 50,
     conf: 'Valley Conference',
-    champ: { name: 'Valley Conference Championship', course: { name: 'Horseshoe Gorge', pb9: -7 } },
-    tryout: { bar: -5, gir: 2, fair: 2, putt: 2 },
+    champ: { name: 'Valley Conference Championship', course: { name: 'Horseshoe Gorge', pb9: PRESTIGE_DIFFICULTY[3].floor } },
+    tryout: { bar: tryoutBar(3), gir: 2, fair: 2, putt: 2 },
   },
   {
     id: 'gilaflats',
@@ -81,13 +113,13 @@ export const SCHOOLS = [
     home: {
       name: 'Monument Valley',
       desc: 'Breezy conditions with nasty rough and sand. Scores go low, so separating yourself is the challenge.',
-      pb9: -7,
+      pb9: PRESTIGE_DIFFICULTY[2].floor,
     },
     team: 48,
     scout: 28,
     conf: 'Desert League',
-    champ: { name: 'Desert League Championship', course: { name: 'Monument Valley', pb9: -7 } },
-    tryout: { bar: -4, gir: 1, fair: 1, putt: 1 },
+    champ: { name: 'Desert League Championship', course: { name: 'Monument Valley', pb9: PRESTIGE_DIFFICULTY[2].floor } },
+    tryout: { bar: tryoutBar(2), gir: 1, fair: 1, putt: 1 },
   },
   {
     id: 'cordwood',
@@ -103,13 +135,13 @@ export const SCHOOLS = [
     home: {
       name: 'Home Bay Links',
       desc: 'A coastal links with stiff easterly winds. Nobody expects much here — which is exactly why a big season gets noticed.',
-      pb9: -8,
+      pb9: PRESTIGE_DIFFICULTY[1].floor,
     },
     team: 32,
     scout: 12,
     conf: 'North Bay League',
-    champ: { name: 'North Bay League Championship', course: { name: 'Home Bay Links', pb9: -8 } },
-    tryout: { bar: -4, gir: 1, fair: 1, putt: 1 },
+    champ: { name: 'North Bay League Championship', course: { name: 'Home Bay Links', pb9: PRESTIGE_DIFFICULTY[1].floor } },
+    tryout: { bar: tryoutBar(1), gir: 1, fair: 1, putt: 1 },
   },
 ];
 
@@ -245,12 +277,18 @@ export function sigmaFor(cons) {
   return SIGMA_WILD + (SIGMA_STEADY - SIGMA_WILD) * (cons / 100);
 }
 
-export function expected9(pb, str) {
-  return pb + 2.5 + 7 * (1 - str / 100);
+// Strength is read relative to the golfer's own program rather than on an
+// absolute scale: a 93-rated prep golfer and a 32-rated small-school golfer
+// both play to roughly FIELD_PAR_GAP over their own course floor, and the
+// floor is what makes the prep event the harder one to win. Keeping strength
+// relative is what lets prestige alone set difficulty while strength still
+// separates golfers inside a field.
+export function expected9(pb, str, teamStr) {
+  return pb + FIELD_PAR_GAP + STROKES_PER_STRENGTH_POINT * (teamStr - str);
 }
 
-export function score9(pb, str, cons, r) {
-  const e = expected9(pb, str);
+export function score9(pb, str, cons, r, teamStr) {
+  const e = expected9(pb, str, teamStr);
   const a = Math.round(e + gauss(r) * sigmaFor(cons));
   return Math.max(a, pb);
 }
@@ -279,31 +317,35 @@ export function distribute(totalToPar, pars, r) {
   return pars.map((p, i) => p + d[i]);
 }
 
-// Point value of a single challenge, keyed by (count - target). Meeting the
-// target exactly is always worth +1; there is no zero. Tune here to change
-// how much a challenge margin swings the starting spot.
-export const CHALLENGE_ADJUSTMENT_SCALE = {
-  '-3': -3,
-  '-2': -2,
-  '-1': -1,
-  '0': 1,
-  '1': 2,
-  '2': 3,
+// Each completed challenge is worth half a depth-chart spot, rounded up, so
+// one challenge already moves you a full spot and three move you two. Only
+// applies at programs without a challenge cut — see tryoutSpot.
+export const CHALLENGE_SPOT_GAIN = 0.5;
+
+export function challengeSpotGain(challengesMade) {
+  return Math.ceil(challengesMade * CHALLENGE_SPOT_GAIN);
+}
+
+// Hand-tuned tryout spot table, one row per prestige tier. Indexed by strokes
+// under the tryout bar: index 0 is one stroke worse than the bar, index 1 is
+// the bar itself, index 6 is the course floor (guaranteed varsity 1). A score
+// outside that range clamps to the nearest end — one stroke worse than the
+// bar is as bad as it gets, and the floor is as good as it gets.
+export const TRYOUT_SPOT_TABLE = {
+  5: [5, 4, 4, 3, 2, 1, 1], // Kingsley Prep
+  4: [5, 4, 3, 3, 2, 2, 1], // St. Aldous Academy
+  3: [5, 5, 4, 3, 3, 2, 1], // Riverbend High
+  2: [5, 5, 4, 3, 3, 1, 1], // Gila Flats High
+  1: [3, 3, 3, 2, 2, 1, 1], // Cordwood Union High
 };
 
-export function challengeAdjustment(count, target) {
-  const diff = Math.max(-3, Math.min(2, count - target));
-  return CHALLENGE_ADJUSTMENT_SCALE[String(diff)];
-}
-
-export function rosterMiddle(roster) {
-  return (roster + 1) / 2;
-}
-
-// rank_score of 0 lands on the middle of the roster; each +1 moves one spot
-// toward varsity-1 (top), each -1 moves one spot toward the bottom.
-export function spotFromRankScore(rankScore, roster) {
-  const spot = Math.round(rosterMiddle(roster) - rankScore);
+// Starting depth-chart spot out of the tryout. Score picks the base spot off
+// the table above; at programs without a challenge cut, each completed
+// challenge then climbs the chart another half spot (rounded up).
+export function tryoutSpot({ score, prestige, roster, challengesMade }) {
+  const strokesUnderBar = Math.max(-1, Math.min(5, tryoutBar(prestige) - score));
+  const baseSpot = TRYOUT_SPOT_TABLE[prestige][strokesUnderBar + 1];
+  const spot = baseSpot - challengeSpotGain(challengesMade);
   return Math.max(1, Math.min(roster, spot));
 }
 

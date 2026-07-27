@@ -106,10 +106,20 @@ export function ScreenRenderer({ viewModel, styles, actions }) {
                 </Pressable>
               </Pressable>
             </Modal>
-            <Text style={styles.entryHint}>Saved for future regional recruiting and player profile.</Text>
-            <TouchableOpacity activeOpacity={0.9} style={styles.primaryButton} onPress={actions.createSave}>
-              <Text style={styles.primaryButtonText}>Start My Career</Text>
-            </TouchableOpacity>
+            <Text style={styles.entryHint}>Required — saved for future regional recruiting and player profile.</Text>
+            {(() => {
+              const canStart = !!viewModel.nameInput?.trim() && !!viewModel.hometownInput;
+              return (
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  disabled={!canStart}
+                  style={[styles.primaryButton, !canStart ? styles.primaryButtonDisabled : null]}
+                  onPress={actions.createSave}
+                >
+                  <Text style={[styles.primaryButtonText, !canStart ? styles.disabledText : null]}>Start My Career</Text>
+                </TouchableOpacity>
+              );
+            })()}
           </View>
         </View>
       );
