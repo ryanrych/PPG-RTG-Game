@@ -74,6 +74,8 @@ export function useRoadToGloryGame() {
       showBack: current.screen === 'confirm' || current.screen === 'event',
       playerName: current.playerName || 'Player',
       nameInput: current.nameInput || '',
+      hometownInput: current.hometownInput || current.hometown || '',
+      hometown: current.hometown || '',
       saves: current.saves || [],
       exposureLive: Math.max(0, Math.min(100, Math.round(current.exposureRaw))),
       exposurePct: `${Math.max(0, Math.min(100, Math.round(current.exposureRaw)))}%`,
@@ -86,6 +88,7 @@ export function useRoadToGloryGame() {
         shirtCol: item.shirt,
         pantsCol: KHA,
         homeName: item.home.name,
+        warning: item.prestige >= 4,
         onSelect: () => selectSchool(item.id),
       })),
     };
@@ -526,15 +529,20 @@ export function useRoadToGloryGame() {
   }
 
   function startNewSave() {
-    setState((prev) => ({ ...prev, screen: 'new-save', nameInput: '' }));
+    setState((prev) => ({ ...prev, screen: 'new-save', nameInput: '', hometownInput: '', hometown: '' }));
   }
 
   function setNameInput(value) {
     setState((prev) => ({ ...prev, nameInput: value }));
   }
 
+  function setHometownInput(value) {
+    setState((prev) => ({ ...prev, hometownInput: value }));
+  }
+
   async function createSave() {
     const name = (state.nameInput || '').trim() || 'Player';
+    const hometown = (state.hometownInput || '').trim();
     const created = await createSaveFile(name);
     if (!created) return;
     setState((prev) => ({
@@ -542,6 +550,8 @@ export function useRoadToGloryGame() {
       ...created.state,
       saveId: created.id,
       playerName: name,
+      hometown,
+      hometownInput: hometown,
       screen: 'select',
       nameInput: '',
       saves: prev.saves,
@@ -931,6 +941,7 @@ export function useRoadToGloryGame() {
     startNewSave,
     createSave,
     setNameInput,
+    setHometownInput,
     loadSave,
     setTab,
     school,

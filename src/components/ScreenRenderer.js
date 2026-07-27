@@ -1,8 +1,21 @@
 import React from 'react';
-import { ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Modal, Pressable, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 export function ScreenRenderer({ viewModel, styles, actions }) {
   const { restart, step, continueFromSummary, goBack } = actions;
+  const [regionMenuOpen, setRegionMenuOpen] = React.useState(false);
+  const regions = [
+    'Great Lakes',
+    'Metro',
+    'Mid-Atlantic',
+    'Midwest',
+    'Mountain',
+    'New England',
+    'Northwest',
+    'Southeast',
+    'Southwest',
+    'West',
+  ];
 
   function renderScreen() {
     if (viewModel.isWelcome) {
@@ -42,8 +55,8 @@ export function ScreenRenderer({ viewModel, styles, actions }) {
         <View style={styles.screenContent}>
           <View style={styles.heroCard}>
             <Text style={styles.eyebrow}>NEW SAVE</Text>
-            <Text style={styles.title}>What should we call you?</Text>
-            <Text style={styles.subtitle}>This is the only choice you make before heading to the school screen.</Text>
+            <Text style={styles.title}>Welcome to Road to Glory</Text>
+            <Text style={styles.subtitle}>Name your player, then choose a school and compete through a high school golf season to build your career.</Text>
           </View>
           <View style={styles.centerCard}>
             <Text style={styles.entryLabel}>PLAYER NAME</Text>
@@ -56,6 +69,44 @@ export function ScreenRenderer({ viewModel, styles, actions }) {
               autoCapitalize="words"
               autoCorrect={false}
             />
+            <Text style={[styles.entryLabel, styles.regionLabel]}>HOMETOWN / REGION</Text>
+            <TouchableOpacity
+              activeOpacity={0.9}
+              style={styles.dropdownField}
+              onPress={() => setRegionMenuOpen((open) => !open)}
+            >
+              <Text style={viewModel.hometownInput ? styles.dropdownValue : styles.dropdownPlaceholder}>
+                {viewModel.hometownInput || 'Select a region'}
+              </Text>
+              <Text style={styles.dropdownChevron}>{regionMenuOpen ? '▲' : '▼'}</Text>
+            </TouchableOpacity>
+            <Modal transparent visible={regionMenuOpen} animationType="fade" onRequestClose={() => setRegionMenuOpen(false)}>
+              <Pressable style={styles.dropdownBackdrop} onPress={() => setRegionMenuOpen(false)}>
+                <Pressable style={styles.dropdownSheet} onPress={() => {}}>
+                  <Text style={styles.dropdownSheetTitle}>Select a region</Text>
+                  <ScrollView showsVerticalScrollIndicator={false}>
+                    {regions.map((region) => {
+                      const selected = viewModel.hometownInput === region;
+                      return (
+                        <TouchableOpacity
+                          key={region}
+                          activeOpacity={0.8}
+                          style={[styles.dropdownItem, selected ? styles.dropdownItemActive : null]}
+                          onPress={() => {
+                            actions.setHometownInput(region);
+                            setRegionMenuOpen(false);
+                          }}
+                        >
+                          <Text style={[styles.dropdownItemText, selected ? styles.dropdownItemTextActive : null]}>{region}</Text>
+                          {selected ? <Text style={styles.dropdownCheck}>✓</Text> : null}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </Pressable>
+              </Pressable>
+            </Modal>
+            <Text style={styles.entryHint}>Saved for future regional recruiting and player profile.</Text>
             <TouchableOpacity activeOpacity={0.9} style={styles.primaryButton} onPress={actions.createSave}>
               <Text style={styles.primaryButtonText}>Start My Career</Text>
             </TouchableOpacity>
@@ -91,8 +142,11 @@ export function ScreenRenderer({ viewModel, styles, actions }) {
                     </View>
                   </View>
                   <View style={styles.schoolFooter}>
-                    <Text style={styles.schoolHome}>{item.homeName}</Text>
+                    <Text style={styles.schoolHomeLabel}>HOME COURSE: {item.homeName}</Text>
                   </View>
+                  {item.warning ? (
+                    <Text style={styles.schoolWarning}>Warning: making the team at this program is not guaranteed.</Text>
+                  ) : null}
                 </View>
               </TouchableOpacity>
             ))}

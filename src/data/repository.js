@@ -50,6 +50,8 @@ export async function createSaveFile(name) {
       saveId: id,
       playerName: name.trim() || 'Player',
       nameInput: '',
+      hometown: '',
+      hometownInput: '',
     },
   };
   saves.unshift(entry);

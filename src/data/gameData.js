@@ -216,6 +216,8 @@ export const initialState = {
   saveId: null,
   playerName: '',
   nameInput: '',
+  hometown: '',
+  hometownInput: '',
   saves: [],
 };
 
