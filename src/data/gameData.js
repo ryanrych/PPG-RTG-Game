@@ -12,7 +12,6 @@ export const SCHOOLS = [
     shirt: '#0b1f5e',
     apparelType: 'Hat',
     blurb: 'Old-money boarding-school golf factory. Scout-dense, brutal to crack.',
-    conferenceSchools: ['kingsley', 'staldous', 'riverbend', 'gilaflats', 'cordwood'],
     home: {
       name: 'Sunset Shore',
       desc: 'Long holes, slick fairways, and a hard field. The least-forgiving track in the state.',
@@ -22,7 +21,7 @@ export const SCHOOLS = [
     scout: 95,
     conf: 'Prep National League',
     champ: { name: 'Prep National Championship', course: { name: 'Sunset Shore', pb9: -5 } },
-    tryout: { gir: 3, fair: 3, stp: -2, failStp: 2 },
+    tryout: { bar: -7, gir: 3, fair: 3, putt: 3, cutThreshold: 2 },
   },
   {
     id: 'staldous',
@@ -35,7 +34,6 @@ export const SCHOOLS = [
     shirt: '#a5102f',
     apparelType: 'Hat',
     blurb: "Strong program. You'll fight for a lineup spot; making the team isn't a lock.",
-    conferenceSchools: ['kingsley', 'staldous', 'riverbend', 'gilaflats', 'cordwood'],
     home: {
       name: 'Triple Snake',
       desc: 'A hard course with tough wind, fast greens, demanding pins, and a strong field.',
@@ -45,7 +43,7 @@ export const SCHOOLS = [
     scout: 75,
     conf: 'Cathedral League',
     champ: { name: 'Cathedral League Championship', course: { name: 'Triple Snake', pb9: -6 } },
-    tryout: { gir: 2, fair: 2, stp: -1, failStp: 3 },
+    tryout: { bar: -6, gir: 2, fair: 2, putt: 2, cutThreshold: 3 },
   },
   {
     id: 'riverbend',
@@ -58,7 +56,6 @@ export const SCHOOLS = [
     shirt: '#2f4f4f',
     apparelType: 'Visor',
     blurb: 'The balanced middle path. Earn your spot, moderate scouting.',
-    conferenceSchools: ['kingsley', 'staldous', 'riverbend', 'gilaflats', 'cordwood'],
     home: {
       name: 'Horseshoe Gorge',
       desc: 'Consistent winds and quick greens — an honest test that rewards a steady game.',
@@ -68,7 +65,7 @@ export const SCHOOLS = [
     scout: 50,
     conf: 'Valley Conference',
     champ: { name: 'Valley Conference Championship', course: { name: 'Horseshoe Gorge', pb9: -7 } },
-    tryout: { gir: 2, fair: 2, stp: 0 },
+    tryout: { bar: -5, gir: 2, fair: 2, putt: 2 },
   },
   {
     id: 'gilaflats',
@@ -81,7 +78,6 @@ export const SCHOOLS = [
     shirt: '#e5451f',
     apparelType: 'Hat',
     blurb: 'Easily make varsity, but scouts rarely visit. Earn eyes with numbers.',
-    conferenceSchools: ['kingsley', 'staldous', 'riverbend', 'gilaflats', 'cordwood'],
     home: {
       name: 'Monument Valley',
       desc: 'Breezy conditions with nasty rough and sand. Scores go low, so separating yourself is the challenge.',
@@ -91,7 +87,7 @@ export const SCHOOLS = [
     scout: 28,
     conf: 'Desert League',
     champ: { name: 'Desert League Championship', course: { name: 'Monument Valley', pb9: -7 } },
-    tryout: { gir: 1, fair: 1, stp: 1 },
+    tryout: { bar: -4, gir: 1, fair: 1, putt: 1 },
   },
   {
     id: 'cordwood',
@@ -104,7 +100,6 @@ export const SCHOOLS = [
     shirt: '#d4af37',
     apparelType: 'Hat',
     blurb: "You're the best player day one. Nobody's watching until you force them to.",
-    conferenceSchools: ['kingsley', 'staldous', 'riverbend', 'gilaflats', 'cordwood'],
     home: {
       name: 'Home Bay Links',
       desc: 'A coastal links with stiff easterly winds. Nobody expects much here — which is exactly why a big season gets noticed.',
@@ -114,7 +109,7 @@ export const SCHOOLS = [
     scout: 12,
     conf: 'North Bay League',
     champ: { name: 'North Bay League Championship', course: { name: 'Home Bay Links', pb9: -8 } },
-    tryout: { gir: 1, fair: 1, stp: 2 },
+    tryout: { bar: -4, gir: 1, fair: 1, putt: 1 },
   },
 ];
 
@@ -144,21 +139,61 @@ export const OPP_NAMES = [
   'Beau Tillman',
 ];
 
-export const LEADS = {
-  kingsley: ['Beau Kessler', 70],
-  staldous: ['Ty Brennan', 66],
-  riverbend: ['Sam Holloway', 64],
-  gilaflats: ['Cody Behr', 60],
-  cordwood: ['Marcus Bell', 58],
+export const NINE_PARS = [4, 5, 3, 4, 4, 3, 5, 4, 4];
+
+// Each playable school's fixed, self-contained conference: its 4 AI rival
+// schools. Rivals never include another playable school. "coachRival" is
+// flavor only (the coach hypes that matchup) — it carries no scoring weight.
+// Rival matches are hosted at the rival's own course, which borrows the
+// parent school's home pb9 as its difficulty baseline.
+export const CONFERENCES = {
+  kingsley: [
+    { name: 'Ashford Hall', strength: 93, coachRival: true, golfer: 'Trent Ashworth', course: 'Cliffside Reach' },
+    { name: 'Bellcrest Academy', strength: 88, golfer: 'Julian Ferris', course: 'Bellcrest Downs' },
+    { name: 'Thornwood School', strength: 85, golfer: 'Grant Sutherland', course: 'Thornwood Glen' },
+    { name: 'Vantage Prep', strength: 80, golfer: 'Miles Whitcombe', course: 'Vantage Ridge' },
+  ],
+  staldous: [
+    { name: 'Cardinal Ridge', strength: 80, coachRival: true, golfer: 'Dominic Reyes', course: 'Cardinal Bluffs' },
+    { name: 'Marlton Catholic', strength: 75, golfer: 'Nolan Vega', course: 'Marlton Chapel Course' },
+    { name: 'Weston Day', strength: 72, golfer: 'Silas Voss', course: 'Weston Meadows' },
+    { name: 'Harlow Central', strength: 67, golfer: 'Preston Doyle', course: 'Harlow Flats' },
+  ],
+  riverbend: [
+    { name: 'Millbrook High', strength: 64, coachRival: true, golfer: 'Casey Nimmo', course: 'Millbrook Run' },
+    { name: 'Cedar Valley', strength: 58, golfer: 'Boone Larkin', course: 'Cedar Hollow' },
+    { name: 'Fox Hollow High', strength: 56, golfer: 'Jared Stroud', course: 'Fox Hollow Greens' },
+    { name: 'Grant Township', strength: 51, golfer: 'Dez Okafor', course: 'Grant Township Municipal' },
+  ],
+  gilaflats: [
+    { name: 'Dry Creek High', strength: 48, coachRival: true, golfer: 'Rowan Tessman', course: 'Dry Creek Wash' },
+    { name: 'Rincon Mesa', strength: 43, golfer: 'Cruz Alderete', course: 'Rincon Mesa Links' },
+    { name: 'Saguaro High', strength: 40, golfer: 'Wyatt Solano', course: 'Saguaro Flats' },
+    { name: 'Ocotillo High', strength: 35, golfer: 'Ridge Calloway', course: 'Ocotillo Basin' },
+  ],
+  cordwood: [
+    { name: 'Pinch Valley High', strength: 32, coachRival: true, golfer: 'Denny Osgood', course: 'Pinch Valley Municipal' },
+    { name: 'Two Rivers High', strength: 27, golfer: 'Amos Kessler', course: 'Two Rivers Course' },
+    { name: 'Millard County', strength: 24, golfer: 'Tobin Rourke', course: 'Millard County Links' },
+    { name: 'Dunmore High', strength: 19, golfer: 'Silas Pruitt', course: 'Dunmore Muni' },
+  ],
 };
+
+// Derives a rival golfer's shot consistency from their strength rating so
+// the whole rival roster is driven by the single strength number.
+export function rivalConsistency(strength) {
+  return Math.round(Math.max(35, Math.min(95, 50 + strength * 0.25)));
+}
 
 export const initialState = {
   screen: 'welcome',
   schoolId: null,
   tryStep: 0,
   tryEntries: [],
-  tryVal: 2,
-  tryScore: 0,
+  tryHoleIndex: 0,
+  tryHoleStrokes: NINE_PARS[0],
+  tryHoleHit: false,
+  tryHoleAcc: [],
   tryPhase: 'brief',
   tryResult: null,
   spot: null,
@@ -171,6 +206,13 @@ export const initialState = {
   curStrokes: 4,
   matchSummary: null,
   pendingScreen: null,
+  recruitPhase: 'board',
+  recruitPinnedIds: [],
+  recruitOffers: null,
+  recruitSort: 'prestige',
+  recruitSelectedId: null,
+  recruitWalkOnQuery: '',
+  committedTeam: null,
   saveId: null,
   playerName: '',
   nameInput: '',
@@ -233,6 +275,53 @@ export function distribute(totalToPar, pars, r) {
     }
   }
   return pars.map((p, i) => p + d[i]);
+}
+
+// Point value of a single challenge, keyed by (count - target). Meeting the
+// target exactly is always worth +1; there is no zero. Tune here to change
+// how much a challenge margin swings the starting spot.
+export const CHALLENGE_ADJUSTMENT_SCALE = {
+  '-3': -3,
+  '-2': -2,
+  '-1': -1,
+  '0': 1,
+  '1': 2,
+  '2': 3,
+};
+
+export function challengeAdjustment(count, target) {
+  const diff = Math.max(-3, Math.min(2, count - target));
+  return CHALLENGE_ADJUSTMENT_SCALE[String(diff)];
+}
+
+export function rosterMiddle(roster) {
+  return (roster + 1) / 2;
+}
+
+// rank_score of 0 lands on the middle of the roster; each +1 moves one spot
+// toward varsity-1 (top), each -1 moves one spot toward the bottom.
+export function spotFromRankScore(rankScore, roster) {
+  const spot = Math.round(rosterMiddle(roster) - rankScore);
+  return Math.max(1, Math.min(roster, spot));
+}
+
+// How far a single meet can move the player up or down the depth chart.
+export const DEPTH_CHART_MOVE_CLAMP = 2;
+
+// Where each teammate currently sits on the depth chart: teammates fill the
+// roster spots around the player's own spot in strength order (highest
+// strength gets the best open spot). Returns an array aligned with
+// `teammates` — positions[i] is teammates[i]'s current 1-indexed spot.
+export function depthChartSeeding(teammates, spot, roster) {
+  const order = teammates.map((_, index) => index).sort((a, b) => teammates[b].str - teammates[a].str);
+  const positions = new Array(teammates.length);
+  let cursor = 0;
+  for (let pos = 1; pos <= roster; pos += 1) {
+    if (pos === spot) continue;
+    positions[order[cursor]] = pos;
+    cursor += 1;
+  }
+  return positions;
 }
 
 export function stars(value) {

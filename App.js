@@ -1,27 +1,39 @@
 ﻿import { StatusBar } from 'expo-status-bar';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Modal, SafeAreaView, Text, TouchableOpacity, View } from 'react-native';
 import { ScreenRenderer } from './src/components/ScreenRenderer';
 import { useRoadToGloryGame } from './src/hooks/useRoadToGloryGame';
 import { styles } from './src/styles/appStyles';
+import { getDatabaseAsync } from './src/data/db';
 
 export default function App() {
   const { viewModel, goBack, restart, step, continueFromSummary, startNewSave, createSave, setNameInput, loadSave } = useRoadToGloryGame();
   const [aboutVisible, setAboutVisible] = useState(false);
 
+  useEffect(() => {
+    // Boots the SQLite reference-data DB (schools/rivals/colleges/courses)
+    // and seeds it from gameData.js/recruiting.js on first run. Nothing in
+    // the live game reads from it yet — this just keeps it built and current.
+    getDatabaseAsync().catch((error) => {
+      console.warn('Reference database failed to initialize:', error);
+    });
+  }, []);
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="light" />
       <View style={styles.phoneFrame}>
-        <View style={styles.aboutButtonWrap}>
-          <TouchableOpacity activeOpacity={0.9} style={styles.aboutButton} onPress={() => setAboutVisible(true)}>
-            <Text style={styles.aboutButtonText}>How This Works</Text>
-          </TouchableOpacity>
-        </View>
+        {viewModel.isWelcome ? (
+          <View style={styles.aboutButtonWrap}>
+            <TouchableOpacity activeOpacity={0.9} style={styles.aboutButton} onPress={() => setAboutVisible(true)}>
+              <Text style={styles.aboutButtonText}>How This Works</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
         <ScreenRenderer
           viewModel={viewModel}
           styles={styles}
-          actions={{ restart, step, continueFromSummary, startNewSave, createSave, setNameInput, loadSave }}
+          actions={{ goBack, restart, step, continueFromSummary, startNewSave, createSave, setNameInput, loadSave }}
         />
         <Modal transparent visible={aboutVisible} animationType="fade" onRequestClose={() => setAboutVisible(false)}>
           <View style={styles.modalOverlay}>
