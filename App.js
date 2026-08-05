@@ -7,7 +7,7 @@ import { styles } from './src/styles/appStyles';
 import { getDatabaseAsync } from './src/data/db';
 
 export default function App() {
-  const { viewModel, goBack, restart, step, continueFromSummary, startNewSave, createSave, setNameInput, setHometownInput, loadSave } = useRoadToGloryGame();
+  const { viewModel, goBack, restart, step, continueFromSummary, continueFromCollegeSummary, startNewSave, createSave, devSkipToCollegeSelect, setNameInput, setHometownInput, loadSave } = useRoadToGloryGame();
   const [aboutVisible, setAboutVisible] = useState(false);
 
   useEffect(() => {
@@ -33,7 +33,7 @@ export default function App() {
         <ScreenRenderer
           viewModel={viewModel}
           styles={styles}
-          actions={{ goBack, restart, step, continueFromSummary, startNewSave, createSave, setNameInput, setHometownInput, loadSave }}
+          actions={{ goBack, restart, step, continueFromSummary, continueFromCollegeSummary, startNewSave, createSave, devSkipToCollegeSelect, setNameInput, setHometownInput, loadSave }}
         />
         <Modal transparent visible={aboutVisible} animationType="fade" onRequestClose={() => setAboutVisible(false)}>
           <View style={styles.modalOverlay}>

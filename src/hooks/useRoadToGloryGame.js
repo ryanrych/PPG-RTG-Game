@@ -24,9 +24,35 @@ import {
 } from '../data/gameData';
 import { computeExposure } from '../data/exposure';
 import { COLLEGES, evaluateAllSchools, pinSchool, unpinSchool, resolveOffers, sortOffers, walkOnOffer, MAX_PINS } from '../data/recruiting';
+import {
+  ROSTER_SIZE as COLLEGE_ROSTER_SIZE,
+  buildCollegeSchedule,
+  collegeCoursePb9,
+  generateCollegeTeammates,
+  generateEventField,
+  generatePracticeChallenge,
+  PRACTICE_PARS,
+  PRACTICE_MOVE_CLAMP,
+  computeSeasonPerformance,
+  ageAndGraduate,
+  recruitFreshmen,
+  resolveOffseasonSpotChange,
+  developPlayerStrength,
+} from '../data/collegeSeason';
 
 const RECRUIT_REACH_DISPLAY_CAP = 20;
 const WALK_ON_RESULTS_CAP = 8;
+const COLLEGE_PARS = NINE_PARS.concat(NINE_PARS);
+
+// Same wording as the high school tryout challenges — practice reuses them verbatim.
+const PRACTICE_LABELS = {
+  gir: { label: 'Greens in Regulation', holePrompt: 'Did you hit the green in regulation (2 under par)?', cta: 'Log Hole →' },
+  fair: { label: 'Fairways Hit', holePrompt: 'Did you hit the fairway or green off the tee?', cta: 'Log Hole →' },
+  putt: { label: 'Putts (2 or Fewer)', holePrompt: 'Two putts or fewer?', cta: 'Log Hole →' },
+};
+
+const CLASS_YEAR_LABELS = { 1: 'Freshman', 2: 'Sophomore', 3: 'Junior', 4: 'Senior' };
+const MAX_COLLEGE_YEARS = 4; // NCAA eligibility — senior season is the last one
 
 export function useRoadToGloryGame() {
   const [state, setState] = useState({ ...initialState, saves: [] });
@@ -70,7 +96,13 @@ export function useRoadToGloryGame() {
       isSummary: current.screen === 'summary',
       isRecruiting: current.screen === 'recruiting',
       isCommitted: current.screen === 'committed',
-      showBack: current.screen === 'confirm' || current.screen === 'event',
+      isCollegeHub: current.screen === 'college-hub',
+      isCollegeEvent: current.screen === 'college-event',
+      isCollegeSummary: current.screen === 'college-summary',
+      isCollegeEnd: current.screen === 'college-end',
+      isCollegePractice: current.screen === 'college-practice',
+      isCollegeOffseason: current.screen === 'college-offseason',
+      showBack: current.screen === 'confirm' || current.screen === 'event' || current.screen === 'college-event' || current.screen === 'college-practice',
       playerName: current.playerName || 'Player',
       nameInput: current.nameInput || '',
       hometownInput: current.hometownInput || current.hometown || '',
@@ -485,6 +517,188 @@ export function useRoadToGloryGame() {
         isWalkOn: team.band === 'walk-on',
         headline: team.band === 'walk-on' ? 'Walking On' : team.band === 'guaranteed' ? 'Signed & Committed' : 'Earned Your Shot',
       };
+      base.startCollegeCareer = () => startCollegeCareer();
+    } else if (base.isCollegeHub && current.committedTeam) {
+      const team = current.committedTeam;
+      base.college = {
+        teamName: team.school.name,
+        conf: team.school.conf,
+        prestigeRank: team.school.prestigeRank,
+        spot: current.collegeSpot,
+        roster: COLLEGE_ROSTER_SIZE,
+        record: collegeRecordLabel(),
+      };
+      base.college.tabs = [
+        { key: 'schedule', label: 'Schedule' },
+        { key: 'roster', label: 'Roster' },
+      ].map((tab) => ({
+        ...tab,
+        onClick: () => setCollegeTab(tab.key),
+        col: current.collegeHubTab === tab.key ? '#f2f3f5' : '#7f8792',
+        underline: current.collegeHubTab === tab.key ? '#2f80ff' : 'transparent',
+      }));
+      if (current.collegePracticeAvailable && current.collegePracticeChallenge) {
+        const info = PRACTICE_LABELS[current.collegePracticeChallenge.type];
+        base.college.practice = {
+          label: info.label,
+          targetText: `${current.collegePracticeChallenge.target} of 3 holes`,
+          play: () => startCollegePractice(),
+          sim: () => simCollegePractice(),
+        };
+      }
+      base.college.showSchedule = current.collegeHubTab === 'schedule';
+      base.college.showRoster = current.collegeHubTab === 'roster';
+      base.college.schedule = current.collegeSchedule.map((tournament, index) => {
+        const entry = current.collegeEvents[index];
+        const isNext = index === current.collegeEventIndex;
+        const row = {
+          id: tournament.id,
+          name: tournament.name,
+          location: tournament.location,
+          course: tournament.course || 'Course TBD',
+        };
+        if (entry && entry.done) {
+          return { ...row, resultLabel: `T${entry.result.rank} of ${entry.result.fieldSize}`, resultCol: entry.result.rank <= 5 ? '#e8a33c' : '#9aa0ab', bg: '#161920', border: '#242833', opacity: 0.75, onClick: () => {} };
+        }
+        if (isNext) {
+          return { ...row, resultLabel: 'PLAY ›', resultCol: '#4d92ff', bg: '#181b21', border: '#2f80ff', opacity: 1, onClick: () => openCollegeEvent(index) };
+        }
+        return { ...row, resultLabel: '', resultCol: '#7f8792', bg: '#141619', border: '#20232b', opacity: 0.5, onClick: () => {} };
+      });
+
+      const positions = depthChartSeeding(current.collegeTeammates, current.collegeSpot, COLLEGE_ROSTER_SIZE);
+      const bySpot = new Array(COLLEGE_ROSTER_SIZE + 1);
+      current.collegeTeammates.forEach((mate, index) => { bySpot[positions[index]] = mate; });
+      base.college.rosterRows = [];
+      for (let pos = 1; pos <= COLLEGE_ROSTER_SIZE; pos += 1) {
+        const isYou = pos === current.collegeSpot;
+        const mate = isYou ? null : bySpot[pos];
+        base.college.rosterRows.push({
+          pos,
+          name: isYou ? 'You' : mate.name,
+          tag: isYou ? `${team.school.name} · starting five` : `Strength ${mate.str}`,
+          initials: isYou ? 'YOU' : initials(mate.name),
+          bg: isYou ? 'rgba(232,80,42,.14)' : '#181b21',
+          border: isYou ? '#e8502a' : '#242833',
+          numCol: isYou ? '#f08464' : '#7f8792',
+          nameCol: isYou ? '#ffb59e' : '#e5e8ed',
+          avatarBg: isYou ? '#e8502a' : '#262b34',
+          avatarCol: isYou ? '#fff' : '#9aa0ab',
+        });
+      }
+    } else if (base.isCollegeEvent && current.collegeEv && current.committedTeam) {
+      const event = current.collegeEv;
+      const total = COLLEGE_PARS.length;
+      const done = event.holeIndex >= total;
+      const holePar = event.pars[Math.min(event.holeIndex, total - 1)];
+      const curToParVal = current.collegeCurStrokes - holePar;
+      base.collegeEvView = {
+        tournamentName: event.tournament.name,
+        location: event.tournament.location,
+        courseName: event.courseName,
+        playing: !done,
+        finished: done,
+        thru: `${event.holeIndex} / ${total}`,
+        holeNum: Math.min(event.holeIndex + 1, total),
+        holePar,
+        curStrokes: current.collegeCurStrokes,
+        curToPar: toPar(curToParVal),
+        curCol: curToParVal < 0 ? '#43b581' : curToParVal > 0 ? '#e0484d' : '#9aa0ab',
+        enterHole: () => enterCollegeHole(),
+        finishEvent: () => finishCollegeEvent(),
+      };
+    } else if (base.isCollegeSummary && current.collegeSummary) {
+      const summary = current.collegeSummary;
+      base.collegeSummaryView = {
+        tournamentName: summary.tournamentName,
+        location: summary.location,
+        toPar: toPar(summary.toPar),
+        rank: ord(summary.rank),
+        fieldSize: summary.fieldSize,
+        madeTop5: summary.rank <= 5,
+        board: summary.board.map((entry, index) => ({
+          pos: index + 1,
+          name: entry.name,
+          you: entry.you,
+          score: toPar(entry.toPar),
+        })),
+      };
+    } else if (base.isCollegeEnd && current.committedTeam) {
+      const team = current.committedTeam;
+      const finishes = current.collegeEvents.filter((event) => event.done);
+      const best = finishes.reduce((best, event) => (best === null || event.result.rank < best ? event.result.rank : best), null);
+      const isFinalSeason = current.collegeYear >= MAX_COLLEGE_YEARS;
+      base.collegeEndView = {
+        teamName: team.school.name,
+        yearLabel: CLASS_YEAR_LABELS[current.collegeYear] || `Year ${current.collegeYear}`,
+        record: collegeRecordLabel(),
+        finalSpot: current.collegeSpot,
+        roster: COLLEGE_ROSTER_SIZE,
+        bestFinish: best !== null ? ord(best) : '—',
+        isFinalSeason,
+        subtitle: isFinalSeason ? 'Senior season complete — your college career is over.' : `${CLASS_YEAR_LABELS[current.collegeYear] || `Year ${current.collegeYear}`} season in the books`,
+        results: finishes.map((event) => ({
+          name: event.result.tournamentName,
+          location: event.result.location,
+          rank: `T${event.result.rank}`,
+          fieldSize: event.result.fieldSize,
+          toPar: toPar(event.result.toPar),
+        })),
+      };
+      if (!isFinalSeason) base.enterOffseason = () => enterOffseason();
+    } else if (base.isCollegeOffseason && current.collegeOffseasonReport) {
+      const report = current.collegeOffseasonReport;
+      const strengthDelta = report.playerStrengthAfter - report.playerStrengthBefore;
+      base.offseason = {
+        year: report.year,
+        performancePct: Math.round(report.performanceScore * 100),
+        graduated: report.graduated.map((mate) => ({ name: mate.name, tag: `Senior · Strength ${mate.str}` })),
+        freshmen: report.freshmen.map((mate) => ({
+          name: mate.name,
+          tag: `Freshman · Strength ${mate.str}`,
+          beatYou: mate.str > report.playerStrengthBefore,
+        })),
+        overtakers: report.overtakers,
+        spotBefore: report.spotBefore,
+        spotAfter: report.spotAfter,
+        spotChanged: report.spotAfter !== report.spotBefore,
+        strengthDelta,
+        strengthLabel: strengthDelta > 0 ? `+${strengthDelta}` : `${strengthDelta}`,
+        continue: () => continueFromCollegeOffseason(),
+      };
+    } else if (base.isCollegePractice && current.collegePracticeChallenge) {
+      const challenge = current.collegePracticeChallenge;
+      const info = PRACTICE_LABELS[challenge.type];
+      base.practice = {
+        phase: current.collegePracticePhase,
+        label: info.label,
+        targetText: `${challenge.target} of 3 holes`,
+      };
+      if (current.collegePracticePhase === 'enter') {
+        const holePar = PRACTICE_PARS[current.collegePracticeHoleIndex];
+        base.practice.hole = {
+          num: current.collegePracticeHoleIndex + 1,
+          par: holePar,
+          holePrompt: info.holePrompt,
+          strokesLabel: current.collegePracticeStrokes,
+          toParLabel: toPar(current.collegePracticeStrokes - holePar),
+          hit: current.collegePracticeHit,
+          cta: current.collegePracticeHoleIndex === 2 ? 'Log Hole & Finish →' : info.cta,
+        };
+        base.practice.setHit = (value) => setCollegePracticeHit(value);
+        base.practice.submitHole = () => submitPracticeHole();
+      } else if (current.collegePracticeResult) {
+        const result = current.collegePracticeResult;
+        base.practice.result = {
+          count: result.count,
+          target: result.target,
+          passed: result.count >= result.target,
+          score: toPar(result.score),
+          simmed: result.simmed,
+          moveLabel: result.move > 0 ? `Up ${result.move} spot${result.move === 1 ? '' : 's'}` : result.move < 0 ? `Down ${Math.abs(result.move)} spot${Math.abs(result.move) === 1 ? '' : 's'}` : 'No change',
+        };
+        base.practice.continue = () => continueFromCollegePractice();
+      }
     } else if (base.isSummary && current.matchSummary) {
       const match = current.matchSummary;
       const cols = { win: '#43b581', loss: '#e0484d', halve: '#e8a33c' };
@@ -537,6 +751,32 @@ export function useRoadToGloryGame() {
 
   function setHometownInput(value) {
     setState((prev) => ({ ...prev, hometownInput: value }));
+  }
+
+  // TEMPORARY DEV SHORTCUT — creates a throwaway save and jumps straight to
+  // college (recruiting) selection with a fake exposure score, skipping the
+  // whole high school career. Remove when no longer needed.
+  async function devSkipToCollegeSelect() {
+    const created = await createSaveFile('Dev Player');
+    if (!created) return;
+    setState((prev) => ({
+      ...prev,
+      ...created.state,
+      saveId: created.id,
+      playerName: 'Dev Player',
+      hometown: 'Metro',
+      hometownInput: 'Metro',
+      nameInput: '',
+      saves: prev.saves,
+      exposureRaw: 65,
+      screen: 'recruiting',
+      recruitPhase: 'board',
+      recruitPinnedIds: [],
+      recruitOffers: null,
+      recruitSelectedId: null,
+      recruitWalkOnQuery: '',
+      committedTeam: null,
+    }));
   }
 
   async function createSave() {
@@ -600,6 +840,12 @@ export function useRoadToGloryGame() {
     } else if (state.screen === 'event') {
       const value = Math.max(1, Math.min(12, state.curStrokes + dir));
       setState((prev) => ({ ...prev, curStrokes: value }));
+    } else if (state.screen === 'college-event') {
+      const value = Math.max(1, Math.min(12, state.collegeCurStrokes + dir));
+      setState((prev) => ({ ...prev, collegeCurStrokes: value }));
+    } else if (state.screen === 'college-practice') {
+      const value = Math.max(1, Math.min(12, state.collegePracticeStrokes + dir));
+      setState((prev) => ({ ...prev, collegePracticeStrokes: value }));
     }
   }
 
@@ -856,6 +1102,10 @@ export function useRoadToGloryGame() {
       setState((prev) => ({ ...prev, screen: 'select' }));
     } else if (state.screen === 'event') {
       setState((prev) => ({ ...prev, screen: 'hub', ev: null }));
+    } else if (state.screen === 'college-event') {
+      setState((prev) => ({ ...prev, screen: 'college-hub', collegeEv: null }));
+    } else if (state.screen === 'college-practice') {
+      setState((prev) => ({ ...prev, screen: 'college-hub' }));
     }
   }
 
@@ -869,6 +1119,10 @@ export function useRoadToGloryGame() {
 
   function setTab(tab) {
     setState((prev) => ({ ...prev, hubTab: tab }));
+  }
+
+  function setCollegeTab(tab) {
+    setState((prev) => ({ ...prev, collegeHubTab: tab }));
   }
 
   function startRecruiting() {
@@ -926,6 +1180,283 @@ export function useRoadToGloryGame() {
     setState((prev) => ({ ...prev, committedTeam: committed, screen: 'committed' }));
   }
 
+  // --- College career -------------------------------------------------------
+  // Same shape as the high school career (hub -> event -> summary -> hub),
+  // rebuilt on real tournaments (tournaments.js) instead of invented
+  // conference rivals. See collegeSeason.js for the schedule/field/course
+  // logic and its documented simplifications.
+
+  function startCollegeCareer() {
+    const team = state.committedTeam;
+    if (!team) return;
+    const college = team.school;
+    const schedule = buildCollegeSchedule(college, 1);
+    const teammates = generateCollegeTeammates(college, COLLEGE_ROSTER_SIZE);
+    setState((prev) => ({
+      ...prev,
+      screen: 'college-hub',
+      collegeYear: 1,
+      collegePlayerStrength: college.strength,
+      collegeSchedule: schedule,
+      collegeTeammates: teammates,
+      collegeSpot: team.rosterRole.spot,
+      collegeEvents: schedule.map(() => ({ done: false, result: null })),
+      collegeEventIndex: 0,
+      collegeEv: null,
+      collegeSummary: null,
+      collegePendingScreen: null,
+      collegeOffseasonReport: null,
+      collegePracticeAvailable: true,
+      collegePracticeChallenge: generatePracticeChallenge(`${college.id}-practice-1-0`),
+      collegePracticeResult: null,
+    }));
+  }
+
+  function openCollegeEvent(index) {
+    const team = state.committedTeam;
+    const tournament = state.collegeSchedule[index];
+    if (!team || !tournament) return;
+    const college = team.school;
+    const pb = collegeCoursePb9(college.strength);
+    const r = rng(hash(`${college.id}-college-event-${tournament.id}`));
+    const field = generateEventField(college, `${college.id}-college-event-${tournament.id}-field`);
+    const mateScores = state.collegeTeammates.map((mate) => score9(pb, mate.str, mate.cons, r, college.strength) + score9(pb, mate.str, mate.cons, r, college.strength));
+    const fieldScores = field.map((entry) => ({ name: entry.name, toPar: score9(pb, entry.str, entry.cons, r, college.strength) + score9(pb, entry.str, entry.cons, r, college.strength) }));
+    setState((prev) => ({
+      ...prev,
+      screen: 'college-event',
+      collegeEv: {
+        idx: index,
+        tournament,
+        pb,
+        pars: COLLEGE_PARS,
+        playerHoles: [],
+        holeIndex: 0,
+        mateScores,
+        fieldScores,
+        courseName: tournament.course || tournament.location,
+      },
+      collegeCurStrokes: COLLEGE_PARS[0],
+    }));
+  }
+
+  function enterCollegeHole() {
+    const event = state.collegeEv;
+    if (!event) return;
+    const holes = [...event.playerHoles, state.collegeCurStrokes];
+    const next = { ...event, playerHoles: holes, holeIndex: event.holeIndex + 1 };
+    const total = COLLEGE_PARS.length;
+    setState((prev) => ({
+      ...prev,
+      collegeEv: next,
+      collegeCurStrokes: prev.collegeEv.holeIndex + 1 < total ? prev.collegeEv.pars[prev.collegeEv.holeIndex + 1] : prev.collegeCurStrokes,
+    }));
+  }
+
+  function finishCollegeEvent() {
+    const event = state.collegeEv;
+    const team = state.committedTeam;
+    if (!event || !team) return;
+    const par = event.pars.reduce((sum, value) => sum + value, 0);
+    const playerToPar = event.playerHoles.reduce((sum, value) => sum + value, 0) - par;
+
+    // Depth-chart movement: identical pure-displacement rule to the high
+    // school career (see gameData.js's depthChartSeeding) — outscoring
+    // teammates seeded above you moves you up, losing to ones seeded below
+    // you moves you down. Your field rank doesn't directly factor in.
+    let spot = state.collegeSpot;
+    const seeding = depthChartSeeding(state.collegeTeammates, spot, COLLEGE_ROSTER_SIZE);
+    let beatAbove = 0;
+    let lostBelow = 0;
+    state.collegeTeammates.forEach((_, index) => {
+      const mateScore = event.mateScores[index];
+      if (mateScore === playerToPar) return;
+      const beatMate = playerToPar < mateScore;
+      const mateSpot = seeding[index];
+      if (mateSpot < spot && beatMate) beatAbove += 1;
+      else if (mateSpot > spot && !beatMate) lostBelow += 1;
+    });
+    const move = Math.max(-DEPTH_CHART_MOVE_CLAMP, Math.min(DEPTH_CHART_MOVE_CLAMP, beatAbove - lostBelow));
+    spot = Math.max(1, Math.min(COLLEGE_ROSTER_SIZE, spot - move));
+
+    const board = [{ name: 'You', toPar: playerToPar, you: true }]
+      .concat(state.collegeTeammates.map((mate, index) => ({ name: mate.name, toPar: event.mateScores[index], you: false })))
+      .concat(event.fieldScores.map((entry) => ({ name: entry.name, toPar: entry.toPar, you: false })));
+    board.sort((a, b) => a.toPar - b.toPar);
+    const rank = board.findIndex((entry) => entry.you) + 1;
+
+    const events = [...state.collegeEvents];
+    events[event.idx] = {
+      done: true,
+      result: { tournamentName: event.tournament.name, location: event.tournament.location, toPar: playerToPar, rank, fieldSize: board.length },
+    };
+    const nextIndex = state.collegeEventIndex + 1;
+    const allDone = events.every((entry) => entry.done);
+
+    setState((prev) => ({
+      ...prev,
+      collegeEvents: events,
+      collegeSpot: spot,
+      collegeEventIndex: nextIndex,
+      collegeEv: null,
+      screen: 'college-summary',
+      collegePendingScreen: allDone ? 'college-end' : 'college-hub',
+      // A fresh practice challenge for the next gap — none left once the
+      // season's over.
+      collegePracticeAvailable: !allDone,
+      collegePracticeChallenge: allDone ? null : generatePracticeChallenge(`${team.school.id}-practice-${state.collegeYear}-${nextIndex}`),
+      collegePracticeResult: null,
+      collegeSummary: {
+        tournamentName: event.tournament.name,
+        location: event.tournament.location,
+        toPar: playerToPar,
+        rank,
+        fieldSize: board.length,
+        board,
+      },
+    }));
+  }
+
+  function continueFromCollegeSummary() {
+    setState((prev) => ({ ...prev, screen: prev.collegePendingScreen || 'college-hub', collegeSummary: null }));
+  }
+
+  // --- Between-round practice -------------------------------------------
+  // A 3-hole challenge reusing the exact high-school tryout challenge types.
+  // Playing it is hole-by-hole, same as the tryout; simming it always
+  // resolves to exactly meeting the target with zero score — a flat
+  // "average" result, no dice roll — so simming is a neutral time-skip,
+  // not a way to gamble for a free boost.
+
+  function startCollegePractice() {
+    if (!state.collegePracticeChallenge) return;
+    setState((prev) => ({
+      ...prev,
+      screen: 'college-practice',
+      collegePracticePhase: 'enter',
+      collegePracticeHoleIndex: 0,
+      collegePracticeStrokes: PRACTICE_PARS[0],
+      collegePracticeHit: false,
+      collegePracticeAcc: [],
+      collegePracticeResult: null,
+    }));
+  }
+
+  function setCollegePracticeHit(value) {
+    setState((prev) => ({ ...prev, collegePracticeHit: value }));
+  }
+
+  function resolvePracticeMove(count, target) {
+    const move = Math.max(-PRACTICE_MOVE_CLAMP, Math.min(PRACTICE_MOVE_CLAMP, count - target));
+    const spot = Math.max(1, Math.min(COLLEGE_ROSTER_SIZE, state.collegeSpot - move));
+    return { spot, move };
+  }
+
+  function submitPracticeHole() {
+    const challenge = state.collegePracticeChallenge;
+    if (!challenge) return;
+    const holeEntry = { strokes: state.collegePracticeStrokes, par: PRACTICE_PARS[state.collegePracticeHoleIndex], hit: state.collegePracticeHit };
+    const acc = [...state.collegePracticeAcc, holeEntry];
+    const nextHoleIndex = state.collegePracticeHoleIndex + 1;
+
+    if (acc.length < 3) {
+      setState((prev) => ({
+        ...prev,
+        collegePracticeAcc: acc,
+        collegePracticeHoleIndex: nextHoleIndex,
+        collegePracticeStrokes: PRACTICE_PARS[nextHoleIndex],
+        collegePracticeHit: false,
+      }));
+      return;
+    }
+
+    const count = acc.filter((hole) => hole.hit).length;
+    const score = acc.reduce((sum, hole) => sum + (hole.strokes - hole.par), 0);
+    const { spot, move } = resolvePracticeMove(count, challenge.target);
+
+    setState((prev) => ({
+      ...prev,
+      collegeSpot: spot,
+      collegePracticeAvailable: false,
+      collegePracticePhase: 'result',
+      collegePracticeResult: { type: challenge.type, count, target: challenge.target, score, move, simmed: false },
+    }));
+  }
+
+  function simCollegePractice() {
+    const challenge = state.collegePracticeChallenge;
+    if (!challenge) return;
+    const count = challenge.target; // average = exactly meets the target
+    const score = 0;
+    const { spot, move } = resolvePracticeMove(count, challenge.target);
+    setState((prev) => ({
+      ...prev,
+      collegeSpot: spot,
+      collegePracticeAvailable: false,
+      screen: 'college-practice',
+      collegePracticePhase: 'result',
+      collegePracticeResult: { type: challenge.type, count, target: challenge.target, score, move, simmed: true },
+    }));
+  }
+
+  function continueFromCollegePractice() {
+    setState((prev) => ({ ...prev, screen: 'college-hub', collegePracticeResult: null }));
+  }
+
+  function collegeRecordLabel() {
+    const finishes = state.collegeEvents.filter((event) => event.done);
+    const top5 = finishes.filter((event) => event.result.rank <= 5).length;
+    return `${top5} top-5${finishes.length ? ` of ${finishes.length}` : ''}`;
+  }
+
+  // --- Offseason: graduation + recruiting, then straight into next season ---
+  function enterOffseason() {
+    const team = state.committedTeam;
+    if (!team || state.collegeYear >= MAX_COLLEGE_YEARS) return; // seniors don't get another offseason
+    const college = team.school;
+    const performanceScore = computeSeasonPerformance(state.collegeEvents);
+    const { staying, graduated } = ageAndGraduate(state.collegeTeammates);
+    const nextYear = state.collegeYear + 1;
+    // Exclude graduating names too, not just staying ones, so a freshman
+    // never gets handed the exact name of the senior they're replacing.
+    const freshmen = recruitFreshmen(graduated.length, [...staying, ...graduated], college, performanceScore, `${college.id}-recruits-${nextYear}`);
+    const newTeammates = [...staying, ...freshmen];
+    const { newSpot, overtakers } = resolveOffseasonSpotChange(freshmen, state.collegePlayerStrength, state.collegeSpot, COLLEGE_ROSTER_SIZE);
+    const newPlayerStrength = developPlayerStrength(state.collegePlayerStrength, performanceScore);
+    const schedule = buildCollegeSchedule(college, nextYear);
+
+    setState((prev) => ({
+      ...prev,
+      screen: 'college-offseason',
+      collegeYear: nextYear,
+      collegeTeammates: newTeammates,
+      collegeSpot: newSpot,
+      collegePlayerStrength: newPlayerStrength,
+      collegeSchedule: schedule,
+      collegeEvents: schedule.map(() => ({ done: false, result: null })),
+      collegeEventIndex: 0,
+      collegeEv: null,
+      collegePracticeAvailable: true,
+      collegePracticeChallenge: generatePracticeChallenge(`${college.id}-practice-${nextYear}-0`),
+      collegePracticeResult: null,
+      collegeOffseasonReport: {
+        year: nextYear,
+        performanceScore,
+        graduated,
+        freshmen,
+        overtakers,
+        spotBefore: state.collegeSpot,
+        spotAfter: newSpot,
+        playerStrengthBefore: state.collegePlayerStrength,
+        playerStrengthAfter: newPlayerStrength,
+      },
+    }));
+  }
+
+  function continueFromCollegeOffseason() {
+    setState((prev) => ({ ...prev, screen: 'college-hub', collegeOffseasonReport: null }));
+  }
+
   function record() {
     const matches = state.events.filter((event) => event.done && event.result.type === 'match');
     const wins = matches.filter((event) => event.result.outcome === 'win').length;
@@ -940,8 +1471,10 @@ export function useRoadToGloryGame() {
     restart,
     step,
     continueFromSummary,
+    continueFromCollegeSummary,
     startNewSave,
     createSave,
+    devSkipToCollegeSelect,
     setNameInput,
     setHometownInput,
     loadSave,

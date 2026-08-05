@@ -2,7 +2,7 @@ import React from 'react';
 import { Modal, Pressable, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 export function ScreenRenderer({ viewModel, styles, actions }) {
-  const { restart, step, continueFromSummary, goBack } = actions;
+  const { restart, step, continueFromSummary, continueFromCollegeSummary, goBack } = actions;
   const [regionMenuOpen, setRegionMenuOpen] = React.useState(false);
   const regions = [
     'Great Lakes',
@@ -28,6 +28,10 @@ export function ScreenRenderer({ viewModel, styles, actions }) {
           </View>
           <TouchableOpacity activeOpacity={0.9} style={styles.primaryButton} onPress={actions.startNewSave}>
             <Text style={styles.primaryButtonText}>Create New Save</Text>
+          </TouchableOpacity>
+          {/* TEMPORARY DEV SHORTCUT — remove when no longer needed */}
+          <TouchableOpacity activeOpacity={0.9} style={styles.ghostButton} onPress={actions.devSkipToCollegeSelect}>
+            <Text style={styles.ghostButtonText}>[DEV] Skip to College Select</Text>
           </TouchableOpacity>
           {viewModel.saves.length > 0 ? (
             <View style={styles.saveList}>
@@ -644,10 +648,320 @@ export function ScreenRenderer({ viewModel, styles, actions }) {
                 <Text style={styles.challengeTarget}>{c.slotLabel}</Text>
                 <Text style={styles.challengeHint}>{c.roleTag}{c.isWalkOn ? ' — no offer, but a real shot to climb the roster.' : ''}</Text>
               </View>
+              <TouchableOpacity activeOpacity={0.9} style={styles.primaryButton} onPress={viewModel.startCollegeCareer}>
+                <Text style={styles.primaryButtonText}>Begin College Career →</Text>
+              </TouchableOpacity>
               <TouchableOpacity activeOpacity={0.9} style={styles.ghostButton} onPress={restart}>
                 <Text style={styles.ghostButtonText}>Start a New Career</Text>
               </TouchableOpacity>
             </View>
+          </ScrollView>
+        </View>
+      );
+    }
+
+    if (viewModel.isCollegeHub) {
+      const g = viewModel.college;
+      return (
+        <View style={styles.screenContent}>
+          <View style={styles.heroCard}>
+            <Text style={styles.eyebrow}>{g.conf} · #{g.prestigeRank} NATIONALLY</Text>
+            <Text style={styles.title}>{g.teamName}</Text>
+            <Text style={styles.subtitle}>Roster Spot #{g.spot} of {g.roster} · {g.record}</Text>
+          </View>
+          <View style={styles.tabRow}>
+            {g.tabs.map((tab) => (
+              <TouchableOpacity key={tab.key} activeOpacity={0.9} onPress={tab.onClick} style={[styles.tabButton, { borderBottomColor: tab.underline }]}>
+                <Text style={[styles.tabText, { color: tab.col }]}>{tab.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+            {g.showSchedule ? (
+              <View>
+                {g.practice ? (
+                  <View style={styles.challengePanel}>
+                    <Text style={styles.challengePanelLabel}>PRACTICE · {g.practice.label.toUpperCase()}</Text>
+                    <Text style={styles.challengeHint}>Clear {g.practice.targetText} to move up the roster; miss it and you slip.</Text>
+                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
+                      <TouchableOpacity activeOpacity={0.9} style={[styles.primaryButton, { flex: 1, marginTop: 0 }]} onPress={g.practice.play}>
+                        <Text style={styles.primaryButtonText}>Play It</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity activeOpacity={0.9} style={[styles.ghostButton, { flex: 1, marginTop: 0 }]} onPress={g.practice.sim}>
+                        <Text style={styles.ghostButtonText}>Sim It</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : null}
+                <Text style={styles.sectionTitle}>SEASON SCHEDULE</Text>
+                {g.schedule.map((row) => (
+                  <TouchableOpacity
+                    key={row.id}
+                    activeOpacity={0.9}
+                    onPress={row.onClick}
+                    style={[styles.scheduleRow, { backgroundColor: row.bg, borderColor: row.border, opacity: row.opacity }]}
+                  >
+                    <View style={styles.rowTextWrap}>
+                      <Text style={styles.rowTitle}>{row.name}</Text>
+                      <Text style={styles.rowSub}>{row.location} · {row.course}</Text>
+                    </View>
+                    <Text style={[styles.scheduleResult, { color: row.resultCol }]}>{row.resultLabel}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : null}
+            {g.showRoster ? (
+              <View style={styles.depthList}>
+                {g.rosterRows.map((row) => (
+                  <View key={row.pos} style={[styles.depthItem, { backgroundColor: row.bg, borderColor: row.border }]}>
+                    <Text style={[styles.depthPos, { color: row.numCol }]}>{row.pos}</Text>
+                    <View style={[styles.avatar, { backgroundColor: row.avatarBg }]}>
+                      <Text style={[styles.avatarText, { color: row.avatarCol }]}>{row.initials}</Text>
+                    </View>
+                    <View style={styles.rowTextWrap}>
+                      <Text style={[styles.rowTitle, { color: row.nameCol }]}>{row.name}</Text>
+                      <Text style={styles.rowSub}>{row.tag}</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </ScrollView>
+        </View>
+      );
+    }
+
+    if (viewModel.isCollegeEvent) {
+      const e = viewModel.collegeEvView;
+      return (
+        <View style={styles.screenContent}>
+          <TouchableOpacity activeOpacity={0.8} style={[styles.backButton, styles.backButtonSpacing]} onPress={goBack}>
+            <Text style={styles.backButtonText}>‹</Text>
+          </TouchableOpacity>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+            <View style={styles.centerCard}>
+              <Text style={styles.challengeEyebrow}>{e.tournamentName.toUpperCase()}</Text>
+              <Text style={styles.challengeSub}>{e.location} · {e.courseName}</Text>
+              {e.playing ? (
+                <View>
+                  <Text style={[styles.challengeEyebrow, { color: '#fff', marginTop: 16 }]}>HOLE {e.holeNum}</Text>
+                  <Text style={styles.challengeTitle}>Par {e.holePar}</Text>
+                  <Text style={styles.challengeHint}>Your strokes · Thru {e.thru}</Text>
+                  <View style={styles.stepperRow}>
+                    <TouchableOpacity activeOpacity={0.8} style={styles.circleButton} onPress={() => step(-1)}>
+                      <Text style={styles.circleButtonText}>−</Text>
+                    </TouchableOpacity>
+                    <View style={styles.scoreStack}>
+                      <Text style={styles.scoreValue}>{e.curStrokes}</Text>
+                      <Text style={[styles.entryHint, { color: e.curCol }]}>{e.curToPar}</Text>
+                    </View>
+                    <TouchableOpacity activeOpacity={0.8} style={styles.circleButton} onPress={() => step(1)}>
+                      <Text style={styles.circleButtonText}>+</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <TouchableOpacity activeOpacity={0.9} style={styles.primaryButton} onPress={e.enterHole}>
+                    <Text style={styles.primaryButtonText}>Enter Hole {e.holeNum} →</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity activeOpacity={0.9} style={styles.primaryButton} onPress={e.finishEvent}>
+                  <Text style={styles.primaryButtonText}>See Results →</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </ScrollView>
+        </View>
+      );
+    }
+
+    if (viewModel.isCollegeSummary) {
+      const s = viewModel.collegeSummaryView;
+      return (
+        <View style={styles.screenContent}>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+            <View style={[styles.summaryCard, { backgroundColor: s.madeTop5 ? 'rgba(232,163,60,.12)' : '#181b21', borderColor: s.madeTop5 ? '#e8a33c' : '#262a33' }]}>
+              <Text style={styles.summaryEyebrow}>{s.tournamentName.toUpperCase()} · {s.location}</Text>
+              <Text style={[styles.summaryHeadline, { color: s.madeTop5 ? '#e8a33c' : '#dfe3e9' }]}>Finished {s.rank} of {s.fieldSize}</Text>
+              <Text style={styles.summaryHint}>Your score: {s.toPar}</Text>
+            </View>
+            <View style={styles.matchCard}>
+              <Text style={styles.sectionTitle}>LEADERBOARD</Text>
+              {s.board.map((row) => (
+                <View key={`${row.name}-${row.pos}`} style={[styles.leaderRow, row.you ? { backgroundColor: 'rgba(232,80,42,.16)', borderColor: '#e8502a' } : { backgroundColor: '#161920', borderColor: '#20232b' }]}>
+                  <Text style={[styles.leaderPos, { color: row.you ? '#f08464' : '#7f8792' }]}>{row.pos}</Text>
+                  <View style={styles.rowTextWrap}>
+                    <Text style={[styles.rowTitle, { color: row.you ? '#ffb59e' : '#e5e8ed' }]}>{row.you ? 'You' : row.name}</Text>
+                  </View>
+                  <Text style={[styles.leaderScore, { color: row.you ? '#ff8a5c' : '#9aa0ab' }]}>{row.score}</Text>
+                </View>
+              ))}
+            </View>
+            <TouchableOpacity activeOpacity={0.9} style={styles.primaryButton} onPress={continueFromCollegeSummary}>
+              <Text style={styles.primaryButtonText}>Continue →</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      );
+    }
+
+    if (viewModel.isCollegeEnd) {
+      const ce = viewModel.collegeEndView;
+      return (
+        <View style={styles.screenContent}>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+            <View style={styles.centerCard}>
+              <Text style={styles.resultEmoji}>{ce.isFinalSeason ? '🎓' : '🏌️'}</Text>
+              <Text style={styles.sectionTitle}>{ce.isFinalSeason ? 'CAREER COMPLETE' : 'SEASON COMPLETE'}</Text>
+              <Text style={styles.challengeTitle}>{ce.teamName}</Text>
+              <Text style={styles.challengeSub}>{ce.subtitle}</Text>
+              <View style={styles.statRow}>
+                <View style={styles.statBox}>
+                  <Text style={styles.statLabel}>TOP-5s</Text>
+                  <Text style={styles.statValue}>{ce.record}</Text>
+                </View>
+                <View style={styles.statBox}>
+                  <Text style={styles.statLabel}>ROSTER SPOT</Text>
+                  <Text style={[styles.statValue, styles.blueText]}>#{ce.finalSpot} of {ce.roster}</Text>
+                </View>
+                <View style={styles.statBox}>
+                  <Text style={styles.statLabel}>BEST FINISH</Text>
+                  <Text style={[styles.statValue, { color: '#e8a33c' }]}>{ce.bestFinish}</Text>
+                </View>
+              </View>
+              <View style={styles.matchCard}>
+                <Text style={styles.sectionTitle}>RESULTS</Text>
+                {ce.results.map((row) => (
+                  <View key={row.name} style={styles.pairingRow}>
+                    <View style={styles.rowTextWrap}>
+                      <Text style={styles.rowTitle}>{row.name}</Text>
+                      <Text style={styles.rowSub}>{row.location}</Text>
+                    </View>
+                    <Text style={styles.scheduleResult}>{row.rank} of {row.fieldSize} · {row.toPar}</Text>
+                  </View>
+                ))}
+              </View>
+              {!ce.isFinalSeason ? (
+                <TouchableOpacity activeOpacity={0.9} style={styles.primaryButton} onPress={viewModel.enterOffseason}>
+                  <Text style={styles.primaryButtonText}>Enter the Offseason →</Text>
+                </TouchableOpacity>
+              ) : null}
+              <TouchableOpacity activeOpacity={0.9} style={styles.ghostButton} onPress={restart}>
+                <Text style={styles.ghostButtonText}>Start a New Career</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </View>
+      );
+    }
+
+    if (viewModel.isCollegeOffseason) {
+      const o = viewModel.offseason;
+      return (
+        <View style={styles.screenContent}>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+            <View style={styles.heroCard}>
+              <Text style={styles.eyebrow}>OFFSEASON</Text>
+              <Text style={styles.title}>Roster Turnover</Text>
+              <Text style={styles.subtitle}>Team finished at the {o.performancePct}th percentile this season — that drives how good the incoming class is.</Text>
+            </View>
+            <View style={styles.matchCard}>
+              <Text style={styles.sectionTitle}>GRADUATING</Text>
+              {o.graduated.length === 0 ? <Text style={styles.rowSub}>Nobody graduated this year.</Text> : o.graduated.map((row) => (
+                <View key={row.name} style={styles.pairingRow}>
+                  <View style={styles.rowTextWrap}>
+                    <Text style={styles.rowTitle}>{row.name}</Text>
+                    <Text style={styles.rowSub}>{row.tag}</Text>
+                  </View>
+                  <Text style={styles.rowSub}>Graduated</Text>
+                </View>
+              ))}
+            </View>
+            <View style={styles.matchCard}>
+              <Text style={styles.sectionTitle}>INCOMING FRESHMEN</Text>
+              {o.freshmen.length === 0 ? <Text style={styles.rowSub}>No new recruits this year.</Text> : o.freshmen.map((row) => (
+                <View key={row.name} style={styles.pairingRow}>
+                  <View style={styles.rowTextWrap}>
+                    <Text style={styles.rowTitle}>{row.name}</Text>
+                    <Text style={styles.rowSub}>{row.tag}</Text>
+                  </View>
+                  <Text style={[styles.rowSub, row.beatYou ? { color: '#e0484d' } : { color: '#43b581' }]}>{row.beatYou ? 'Ahead of you' : 'Behind you'}</Text>
+                </View>
+              ))}
+            </View>
+            <View style={[styles.challengePanel, o.spotChanged ? { borderColor: '#e8502a' } : null]}>
+              <Text style={styles.challengePanelLabel}>YOUR ROSTER SPOT</Text>
+              <Text style={styles.challengeTarget}>#{o.spotBefore} → #{o.spotAfter}</Text>
+              <Text style={styles.challengeHint}>
+                {o.overtakers > 0 ? `${o.overtakers} freshman${o.overtakers === 1 ? '' : 's'} beat you out for playing time. ` : 'No freshman beat you out this year. '}
+                Your own strength changed {o.strengthLabel} from how you played.
+              </Text>
+            </View>
+            <TouchableOpacity activeOpacity={0.9} style={styles.primaryButton} onPress={o.continue}>
+              <Text style={styles.primaryButtonText}>Start {o.year === 2 ? 'Sophomore' : o.year === 3 ? 'Junior' : o.year === 4 ? 'Senior' : `Year ${o.year}`} Season →</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      );
+    }
+
+    if (viewModel.isCollegePractice) {
+      const p = viewModel.practice;
+      return (
+        <View style={styles.screenContent}>
+          <TouchableOpacity activeOpacity={0.8} style={[styles.backButton, styles.backButtonSpacing]} onPress={goBack}>
+            <Text style={styles.backButtonText}>‹</Text>
+          </TouchableOpacity>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+            {p.phase === 'enter' ? (
+              <View style={styles.centerCard}>
+                <Text style={styles.challengeEyebrow}>PRACTICE · {p.label.toUpperCase()} · HOLE {p.hole.num} OF 3</Text>
+                <Text style={styles.challengeTitle}>Hole {p.hole.num}</Text>
+                <Text style={styles.challengeSub}>Par {p.hole.par} · Clear {p.targetText}</Text>
+                <View style={styles.entryPanel}>
+                  <Text style={styles.entryLabel}>YOUR STROKES</Text>
+                  <View style={styles.stepperRow}>
+                    <TouchableOpacity activeOpacity={0.8} style={styles.circleButton} onPress={() => step(-1)}>
+                      <Text style={styles.circleButtonText}>−</Text>
+                    </TouchableOpacity>
+                    <View style={styles.scoreStack}>
+                      <Text style={styles.scoreValue}>{p.hole.strokesLabel}</Text>
+                      <Text style={styles.entryHint}>{p.hole.toParLabel}</Text>
+                    </View>
+                    <TouchableOpacity activeOpacity={0.8} style={styles.circleButton} onPress={() => step(1)}>
+                      <Text style={styles.circleButtonText}>+</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                <View style={styles.entryPanel}>
+                  <Text style={styles.entryLabel}>{p.hole.holePrompt}</Text>
+                  <View style={styles.toggleRow}>
+                    <TouchableOpacity activeOpacity={0.8} style={[styles.toggleButton, !p.hole.hit && styles.toggleButtonActive]} onPress={() => p.setHit(false)}>
+                      <Text style={[styles.toggleButtonText, !p.hole.hit && styles.toggleButtonTextActive]}>No</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity activeOpacity={0.8} style={[styles.toggleButton, p.hole.hit && styles.toggleButtonActive]} onPress={() => p.setHit(true)}>
+                      <Text style={[styles.toggleButtonText, p.hole.hit && styles.toggleButtonTextActive]}>Yes</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                <TouchableOpacity activeOpacity={0.9} style={styles.primaryButton} onPress={p.submitHole}>
+                  <Text style={styles.primaryButtonText}>{p.hole.cta}</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.centerCard}>
+                <Text style={styles.resultEmoji}>{p.result.passed ? '✅' : '⚠️'}</Text>
+                <Text style={[styles.resultHeadline, { color: p.result.passed ? '#43b581' : '#e0484d' }]}>{p.result.passed ? 'Challenge Cleared' : 'Challenge Missed'}</Text>
+                <Text style={styles.challengeSub}>{p.label} · {p.result.count} of 3 (needed {p.result.target}){p.result.simmed ? ' · simmed' : ''}</Text>
+                <View style={styles.challengePanel}>
+                  <Text style={styles.challengePanelLabel}>ROSTER MOVEMENT</Text>
+                  <Text style={styles.challengeTarget}>{p.result.moveLabel}</Text>
+                  <Text style={styles.challengeHint}>Practice score: {p.result.score}</Text>
+                </View>
+                <TouchableOpacity activeOpacity={0.9} style={styles.primaryButton} onPress={p.continue}>
+                  <Text style={styles.primaryButtonText}>Back to Team →</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </ScrollView>
         </View>
       );
