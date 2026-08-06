@@ -26,6 +26,9 @@ import { computeExposure } from '../data/exposure';
 import { COLLEGES, evaluateAllSchools, pinSchool, unpinSchool, resolveOffers, sortOffers, walkOnOffer, MAX_PINS } from '../data/recruiting';
 import {
   ROSTER_SIZE as COLLEGE_ROSTER_SIZE,
+  LINEUP_SIZE as COLLEGE_LINEUP_SIZE,
+  travelingTeammates,
+  isBenched,
   buildCollegeSchedule,
   collegeCoursePb9,
   generateCollegeTeammates,
@@ -41,6 +44,11 @@ import {
 } from '../data/collegeSeason';
 
 const RECRUIT_REACH_DISPLAY_CAP = 20;
+const OUT_OF_RANGE_LABEL = {
+  'above-window': 'Below your level',
+  'below-reach': 'Too far out of reach',
+  'guaranteed-cap': 'Offer went elsewhere',
+};
 const WALK_ON_RESULTS_CAP = 8;
 const COLLEGE_PARS = NINE_PARS.concat(NINE_PARS);
 
@@ -53,6 +61,13 @@ const PRACTICE_LABELS = {
 
 const CLASS_YEAR_LABELS = { 1: 'Freshman', 2: 'Sophomore', 3: 'Junior', 4: 'Senior' };
 const MAX_COLLEGE_YEARS = 4; // NCAA eligibility — senior season is the last one
+
+// [DEV] Scout exposure for recruiting: the real season-computed number,
+// unless a dev override slider value is set on the save.
+function resolvedExposure(s) {
+  const real = Math.max(0, Math.min(100, Math.round(s.exposureRaw)));
+  return s.devExposureOverride == null ? real : s.devExposureOverride;
+}
 
 export function useRoadToGloryGame() {
   const [state, setState] = useState({ ...initialState, saves: [] });
@@ -426,7 +441,7 @@ export function useRoadToGloryGame() {
       base.exposureVerdict = exp >= 70 ? 'Big programs are watching. You enter recruiting with real leverage.' : exp >= 45 ? 'You’re on the radar of mid-tier programs.' : 'A few local scouts noticed. Next season is the one that matters.';
       base.startRecruiting = () => startRecruiting();
     } else if (base.isRecruiting) {
-      const exposure = Math.max(0, Math.min(100, Math.round(current.exposureRaw)));
+      const exposure = resolvedExposure(current);
       const evaluations = evaluateAllSchools(exposure);
       const byProgramRank = (a, b) => a.school.prestigeRank - b.school.prestigeRank;
 
@@ -439,6 +454,14 @@ export function useRoadToGloryGame() {
         phase: current.recruitPhase,
         pinnedCount: current.recruitPinnedIds.length,
         maxPins: MAX_PINS,
+        // [DEV] Slider state — devExposureValue is what the slider shows
+        // (falls back to the real exposure until the dev drags it); actual is
+        // the real season-computed number, for reference next to the slider.
+        devExposureValue: current.devExposureOverride == null ? exposure : current.devExposureOverride,
+        devExposureActual: Math.max(0, Math.min(100, Math.round(current.exposureRaw))),
+        setDevExposure: (value) => setDevExposureOverride(value),
+        clearDevExposure: () => setDevExposureOverride(null),
+        devExposureOverridden: current.devExposureOverride != null,
         guaranteedCount: guaranteed.length,
         guaranteedRows: guaranteed.map((item) => ({
           id: item.school.id,
@@ -462,7 +485,58 @@ export function useRoadToGloryGame() {
           };
         }),
         lockIn: () => lockInRecruiting(),
+        allCount: evaluations.length,
+        allRows: evaluations.slice().sort(byProgramRank).map((item) => {
+          if (item.band === 'guaranteed') {
+            return {
+              id: item.school.id,
+              name: item.school.name,
+              conf: item.school.conf,
+              prestigeRank: item.school.prestigeRank,
+              band: 'guaranteed',
+              statusText: `Roster Spot #${item.rosterRole.spot}`,
+              active: false,
+              onPress: null,
+            };
+          }
+          if (item.band === 'reach') {
+            const pinned = current.recruitPinnedIds.includes(item.school.id);
+            return {
+              id: item.school.id,
+              name: item.school.name,
+              conf: item.school.conf,
+              prestigeRank: item.school.prestigeRank,
+              band: 'reach',
+              statusText: pinned ? 'PINNED' : `${Math.round(item.conversionChance * 100)}% chance`,
+              active: pinned,
+              onPress: () => toggleReachPin(item.school.id),
+            };
+          }
+          // Cleared the bar but lost the guaranteed slot to competition, too
+          // far below your level to interest a program, or too far above it
+          // to be a realistic reach — none of that stops you from walking on.
+          // Tapping targets it for the "Walk On" commit below, same as
+          // searching for it by name on the post-lock-in offer sheet.
+          const selected = current.recruitSelectedId === item.school.id;
+          return {
+            id: item.school.id,
+            name: item.school.name,
+            conf: item.school.conf,
+            prestigeRank: item.school.prestigeRank,
+            band: 'out-of-range',
+            statusText: selected ? 'WALK-ON TARGET' : (OUT_OF_RANGE_LABEL[item.reason] || 'Out of range'),
+            active: selected,
+            onPress: () => selectOffer(item.school.id),
+          };
+        }),
       };
+
+      const walkOnTarget = current.recruitSelectedId
+        ? COLLEGES.find((college) => college.id === current.recruitSelectedId)
+        : null;
+      base.recruit.walkOnSelectedId = current.recruitSelectedId;
+      base.recruit.walkOnSelectedName = walkOnTarget ? walkOnTarget.name : null;
+      base.recruit.commitWalkOn = () => commitToSelection();
 
       if (current.recruitPhase === 'offers' && current.recruitOffers) {
         const sorted = sortOffers(current.recruitOffers, current.recruitSort);
@@ -520,12 +594,14 @@ export function useRoadToGloryGame() {
       base.startCollegeCareer = () => startCollegeCareer();
     } else if (base.isCollegeHub && current.committedTeam) {
       const team = current.committedTeam;
+      const benched = isBenched(current.collegeSpot, COLLEGE_LINEUP_SIZE);
       base.college = {
         teamName: team.school.name,
         conf: team.school.conf,
         prestigeRank: team.school.prestigeRank,
         spot: current.collegeSpot,
         roster: COLLEGE_ROSTER_SIZE,
+        benched,
         record: collegeRecordLabel(),
       };
       base.college.tabs = [
@@ -558,10 +634,15 @@ export function useRoadToGloryGame() {
           course: tournament.course || 'Course TBD',
         };
         if (entry && entry.done) {
+          if (entry.result.benched) {
+            return { ...row, resultLabel: 'DNP · BENCHED', resultCol: '#7f8792', bg: '#161920', border: '#242833', opacity: 0.75, onClick: () => {} };
+          }
           return { ...row, resultLabel: `T${entry.result.rank} of ${entry.result.fieldSize}`, resultCol: entry.result.rank <= 5 ? '#e8a33c' : '#9aa0ab', bg: '#161920', border: '#242833', opacity: 0.75, onClick: () => {} };
         }
         if (isNext) {
-          return { ...row, resultLabel: 'PLAY ›', resultCol: '#4d92ff', bg: '#181b21', border: '#2f80ff', opacity: 1, onClick: () => openCollegeEvent(index) };
+          return benched
+            ? { ...row, resultLabel: 'BENCHED ›', resultCol: '#e0484d', bg: '#181b21', border: '#5a2f2f', opacity: 1, onClick: () => openCollegeEvent(index) }
+            : { ...row, resultLabel: 'PLAY ›', resultCol: '#4d92ff', bg: '#181b21', border: '#2f80ff', opacity: 1, onClick: () => openCollegeEvent(index) };
         }
         return { ...row, resultLabel: '', resultCol: '#7f8792', bg: '#141619', border: '#20232b', opacity: 0.5, onClick: () => {} };
       });
@@ -573,10 +654,11 @@ export function useRoadToGloryGame() {
       for (let pos = 1; pos <= COLLEGE_ROSTER_SIZE; pos += 1) {
         const isYou = pos === current.collegeSpot;
         const mate = isYou ? null : bySpot[pos];
+        const traveling = pos <= COLLEGE_LINEUP_SIZE;
         base.college.rosterRows.push({
           pos,
           name: isYou ? 'You' : mate.name,
-          tag: isYou ? `${team.school.name} · starting five` : `Strength ${mate.str}`,
+          tag: isYou ? `${team.school.name} · ${traveling ? 'starting five' : 'bench'}` : `Strength ${mate.str}${traveling ? '' : ' · bench'}`,
           initials: isYou ? 'YOU' : initials(mate.name),
           bg: isYou ? 'rgba(232,80,42,.14)' : '#181b21',
           border: isYou ? '#e8502a' : '#242833',
@@ -609,24 +691,43 @@ export function useRoadToGloryGame() {
       };
     } else if (base.isCollegeSummary && current.collegeSummary) {
       const summary = current.collegeSummary;
-      base.collegeSummaryView = {
-        tournamentName: summary.tournamentName,
-        location: summary.location,
-        toPar: toPar(summary.toPar),
-        rank: ord(summary.rank),
-        fieldSize: summary.fieldSize,
-        madeTop5: summary.rank <= 5,
-        board: summary.board.map((entry, index) => ({
-          pos: index + 1,
-          name: entry.name,
-          you: entry.you,
-          score: toPar(entry.toPar),
-        })),
-      };
+      if (summary.benched) {
+        base.collegeSummaryView = {
+          benched: true,
+          tournamentName: summary.tournamentName,
+          location: summary.location,
+          hint: summary.bestName
+            ? `You didn't crack this week's traveling five. ${summary.bestName} led the team, finishing ${ord(summary.bestRank)} of ${summary.fieldSize}.`
+            : "You didn't crack this week's traveling five.",
+          board: summary.board.map((entry, index) => ({
+            pos: index + 1,
+            name: entry.name,
+            mine: entry.mine,
+            score: toPar(entry.toPar),
+          })),
+        };
+      } else {
+        base.collegeSummaryView = {
+          benched: false,
+          tournamentName: summary.tournamentName,
+          location: summary.location,
+          toPar: toPar(summary.toPar),
+          rank: ord(summary.rank),
+          fieldSize: summary.fieldSize,
+          madeTop5: summary.rank <= 5,
+          board: summary.board.map((entry, index) => ({
+            pos: index + 1,
+            name: entry.name,
+            you: entry.you,
+            score: toPar(entry.toPar),
+          })),
+        };
+      }
     } else if (base.isCollegeEnd && current.committedTeam) {
       const team = current.committedTeam;
       const finishes = current.collegeEvents.filter((event) => event.done);
-      const best = finishes.reduce((best, event) => (best === null || event.result.rank < best ? event.result.rank : best), null);
+      const played = finishes.filter((event) => !event.result.benched);
+      const best = played.reduce((best, event) => (best === null || event.result.rank < best ? event.result.rank : best), null);
       const isFinalSeason = current.collegeYear >= MAX_COLLEGE_YEARS;
       base.collegeEndView = {
         teamName: team.school.name,
@@ -634,16 +735,27 @@ export function useRoadToGloryGame() {
         record: collegeRecordLabel(),
         finalSpot: current.collegeSpot,
         roster: COLLEGE_ROSTER_SIZE,
+        benched: isBenched(current.collegeSpot, COLLEGE_LINEUP_SIZE),
         bestFinish: best !== null ? ord(best) : '—',
         isFinalSeason,
         subtitle: isFinalSeason ? 'Senior season complete — your college career is over.' : `${CLASS_YEAR_LABELS[current.collegeYear] || `Year ${current.collegeYear}`} season in the books`,
-        results: finishes.map((event) => ({
-          name: event.result.tournamentName,
-          location: event.result.location,
-          rank: `T${event.result.rank}`,
-          fieldSize: event.result.fieldSize,
-          toPar: toPar(event.result.toPar),
-        })),
+        results: finishes.map((event) => (event.result.benched
+          ? {
+            name: event.result.tournamentName,
+            location: event.result.location,
+            benched: true,
+            fieldSize: event.result.fieldSize,
+            bestName: event.result.bestName,
+            bestRank: event.result.bestRank,
+          }
+          : {
+            name: event.result.tournamentName,
+            location: event.result.location,
+            benched: false,
+            rank: `T${event.result.rank}`,
+            fieldSize: event.result.fieldSize,
+            toPar: toPar(event.result.toPar),
+          })),
       };
       if (!isFinalSeason) base.enterOffseason = () => enterOffseason();
     } else if (base.isCollegeOffseason && current.collegeOffseasonReport) {
@@ -1134,11 +1246,16 @@ export function useRoadToGloryGame() {
       recruitOffers: null,
       recruitSelectedId: null,
       recruitWalkOnQuery: '',
+      devExposureOverride: null,
     }));
   }
 
+  function setDevExposureOverride(value) {
+    setState((prev) => ({ ...prev, devExposureOverride: value == null ? null : Math.max(0, Math.min(100, Math.round(value))) }));
+  }
+
   function toggleReachPin(schoolId) {
-    const exposure = Math.max(0, Math.min(100, Math.round(state.exposureRaw)));
+    const exposure = resolvedExposure(state);
     setState((prev) => {
       const pinned = prev.recruitPinnedIds.includes(schoolId);
       const nextPinnedIds = pinned
@@ -1149,9 +1266,9 @@ export function useRoadToGloryGame() {
   }
 
   function lockInRecruiting() {
-    const exposure = Math.max(0, Math.min(100, Math.round(state.exposureRaw)));
+    const exposure = resolvedExposure(state);
     const offers = resolveOffers({ exposure, pinnedIds: state.recruitPinnedIds, seed: `${state.saveId}recruit` });
-    setState((prev) => ({ ...prev, recruitOffers: offers, recruitPhase: 'offers' }));
+    setState((prev) => ({ ...prev, recruitOffers: offers, recruitPhase: 'offers', recruitSelectedId: null }));
   }
 
   function setRecruitSort(sortKey) {
@@ -1212,15 +1329,34 @@ export function useRoadToGloryGame() {
     }));
   }
 
+  // Any teammate outside this week's traveling five doesn't get a score at
+  // all (null) — they didn't play, so they can neither be beaten nor lose
+  // ground this week. Kept index-aligned with collegeTeammates so movement
+  // math (finishCollegeEvent) can look scores up by the same index as
+  // depthChartSeeding.
+  function collegeMateScores(pb, r, college, spot) {
+    const seeding = depthChartSeeding(state.collegeTeammates, spot, COLLEGE_ROSTER_SIZE);
+    return state.collegeTeammates.map((mate, index) => {
+      if (seeding[index] > COLLEGE_LINEUP_SIZE) return null;
+      return score9(pb, mate.str, mate.cons, r, college.strength) + score9(pb, mate.str, mate.cons, r, college.strength);
+    });
+  }
+
   function openCollegeEvent(index) {
     const team = state.committedTeam;
     const tournament = state.collegeSchedule[index];
     if (!team || !tournament) return;
     const college = team.school;
+
+    if (isBenched(state.collegeSpot, COLLEGE_LINEUP_SIZE)) {
+      resolveBenchedEvent(index, tournament, college);
+      return;
+    }
+
     const pb = collegeCoursePb9(college.strength);
     const r = rng(hash(`${college.id}-college-event-${tournament.id}`));
     const field = generateEventField(college, `${college.id}-college-event-${tournament.id}-field`);
-    const mateScores = state.collegeTeammates.map((mate) => score9(pb, mate.str, mate.cons, r, college.strength) + score9(pb, mate.str, mate.cons, r, college.strength));
+    const mateScores = collegeMateScores(pb, r, college, state.collegeSpot);
     const fieldScores = field.map((entry) => ({ name: entry.name, toPar: score9(pb, entry.str, entry.cons, r, college.strength) + score9(pb, entry.str, entry.cons, r, college.strength) }));
     setState((prev) => ({
       ...prev,
@@ -1237,6 +1373,56 @@ export function useRoadToGloryGame() {
         courseName: tournament.course || tournament.location,
       },
       collegeCurStrokes: COLLEGE_PARS[0],
+    }));
+  }
+
+  // You're on the roster but not this week's traveling five — the team plays
+  // on without you and your spot doesn't move (there's nothing to compare
+  // your play against when you didn't play). The only way onto the travel
+  // squad is a practice challenge between tournaments.
+  function resolveBenchedEvent(index, tournament, college) {
+    const pb = collegeCoursePb9(college.strength);
+    const r = rng(hash(`${college.id}-college-event-${tournament.id}`));
+    const field = generateEventField(college, `${college.id}-college-event-${tournament.id}-field`);
+    const traveling = travelingTeammates(state.collegeTeammates, state.collegeSpot, COLLEGE_ROSTER_SIZE, COLLEGE_LINEUP_SIZE);
+    const mateScores = traveling.map((mate) => score9(pb, mate.str, mate.cons, r, college.strength) + score9(pb, mate.str, mate.cons, r, college.strength));
+    const fieldScores = field.map((entry) => ({ name: entry.name, toPar: score9(pb, entry.str, entry.cons, r, college.strength) + score9(pb, entry.str, entry.cons, r, college.strength) }));
+
+    const board = traveling
+      .map((mate, i) => ({ name: mate.name, toPar: mateScores[i], mine: true }))
+      .concat(fieldScores.map((entry) => ({ name: entry.name, toPar: entry.toPar, mine: false })));
+    board.sort((a, b) => a.toPar - b.toPar);
+    const bestIndex = board.findIndex((entry) => entry.mine);
+    const bestRank = bestIndex + 1;
+    const bestName = bestIndex >= 0 ? board[bestIndex].name : null;
+
+    const events = [...state.collegeEvents];
+    events[index] = {
+      done: true,
+      result: { tournamentName: tournament.name, location: tournament.location, benched: true, fieldSize: board.length, bestRank, bestName },
+    };
+    const nextIndex = state.collegeEventIndex + 1;
+    const allDone = events.every((entry) => entry.done);
+
+    setState((prev) => ({
+      ...prev,
+      collegeEvents: events,
+      collegeEventIndex: nextIndex,
+      collegeEv: null,
+      screen: 'college-summary',
+      collegePendingScreen: allDone ? 'college-end' : 'college-hub',
+      collegePracticeAvailable: !allDone,
+      collegePracticeChallenge: allDone ? null : generatePracticeChallenge(`${college.id}-practice-${state.collegeYear}-${nextIndex}`),
+      collegePracticeResult: null,
+      collegeSummary: {
+        tournamentName: tournament.name,
+        location: tournament.location,
+        benched: true,
+        fieldSize: board.length,
+        bestRank,
+        bestName,
+        board,
+      },
     }));
   }
 
@@ -1270,7 +1456,7 @@ export function useRoadToGloryGame() {
     let lostBelow = 0;
     state.collegeTeammates.forEach((_, index) => {
       const mateScore = event.mateScores[index];
-      if (mateScore === playerToPar) return;
+      if (mateScore == null || mateScore === playerToPar) return; // didn't travel this week — nothing to compare
       const beatMate = playerToPar < mateScore;
       const mateSpot = seeding[index];
       if (mateSpot < spot && beatMate) beatAbove += 1;
@@ -1280,7 +1466,9 @@ export function useRoadToGloryGame() {
     spot = Math.max(1, Math.min(COLLEGE_ROSTER_SIZE, spot - move));
 
     const board = [{ name: 'You', toPar: playerToPar, you: true }]
-      .concat(state.collegeTeammates.map((mate, index) => ({ name: mate.name, toPar: event.mateScores[index], you: false })))
+      .concat(state.collegeTeammates
+        .map((mate, index) => ({ name: mate.name, toPar: event.mateScores[index], you: false }))
+        .filter((entry) => entry.toPar != null))
       .concat(event.fieldScores.map((entry) => ({ name: entry.name, toPar: entry.toPar, you: false })));
     board.sort((a, b) => a.toPar - b.toPar);
     const rank = board.findIndex((entry) => entry.you) + 1;
@@ -1404,7 +1592,7 @@ export function useRoadToGloryGame() {
   }
 
   function collegeRecordLabel() {
-    const finishes = state.collegeEvents.filter((event) => event.done);
+    const finishes = state.collegeEvents.filter((event) => event.done && !event.result.benched);
     const top5 = finishes.filter((event) => event.result.rank <= 5).length;
     return `${top5} top-5${finishes.length ? ` of ${finishes.length}` : ''}`;
   }

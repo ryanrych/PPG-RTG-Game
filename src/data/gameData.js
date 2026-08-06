@@ -272,6 +272,10 @@ export const initialState = {
   hometown: '',
   hometownInput: '',
   saves: [],
+  // [DEV] Manual override for scout exposure on the recruiting screen — lets
+  // testing sweep the whole 0-100 range without replaying a season. null
+  // means "use the real season-computed exposureRaw".
+  devExposureOverride: null,
 };
 
 export function rng(seed) {

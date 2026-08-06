@@ -1,4 +1,16 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(node -e ' *)",
+      "Bash(node roster9.mjs)",
+      "Bash(node --experimental-specifier-resolution=node roster9.mjs)",
+      "Bash(node --import ./register-loader.mjs roster9.mjs)",
+      "Bash(node --loader ./loader.mjs roster9.mjs)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\rychlakr\\AppData\\Local\\Temp\\claude\\c--dev-rtg\\aa79e961-54b1-4e1d-b4a0-f383024b5606"
+    ]
+  },
   "enabledPlugins": {
     "expo@claude-plugins-official": true
   }

@@ -15,6 +15,13 @@ import { COLLEGE_ROSTER } from './colleges';
 export const OFFER_WINDOW = 22; // guaranteed if 0 <= margin <= this
 export const REACH_WINDOW = 18; // reach (pinnable) if 0 < gap <= this
 
+// thresholdFromStrength's sqrt curve bunches thresholds tightly in the
+// mid/low tiers, so a flat OFFER_WINDOW margin can put 100+ schools in the
+// guaranteed band at once. Only the best GUARANTEED_OFFER_CAP programs
+// inside that window actually extend an offer — the rest cleared the bar
+// but lost out to competition for a roster spot, same as in real recruiting.
+export const GUARANTEED_OFFER_CAP = 8;
+
 export const MAX_PINS = 5;
 
 // Higher-strength programs get higher bars. Exponent < 1 bunches the elite
@@ -26,14 +33,22 @@ export function thresholdFromStrength(strength) {
   return Math.round(100 * (strength / 100) ** THRESHOLD_CURVE_EXPONENT);
 }
 
-// Starting roster spot by margin (how far exposure clears the bar). Checked
-// top-down, first match wins — keep sorted by descending minMargin.
+// Starting roster spot by margin (how far exposure clears the bar), across a
+// 9-deep roster where only the top 5 travel to (and play) a tournament — see
+// LINEUP_SIZE in collegeSeason.js. A recruit good enough to be a clear
+// difference-maker starts in the lineup; a borderline one starts on the
+// bench and has to practice their way in. Checked top-down, first match
+// wins — keep sorted by descending minMargin.
 export const ROSTER_ROLE_BREAKPOINTS = [
-  { minMargin: 25, spot: 1, tag: 'Clear #1 Recruit' },
-  { minMargin: 15, spot: 2, tag: 'High Priority' },
-  { minMargin: 7, spot: 3, tag: 'Solid Contributor' },
-  { minMargin: 2, spot: 4, tag: 'Depth Piece' },
-  { minMargin: 0, spot: 5, tag: 'Last-Spot Flyer' },
+  { minMargin: 20, spot: 1, tag: 'Clear #1 Recruit' },
+  { minMargin: 16, spot: 2, tag: 'High Priority' },
+  { minMargin: 12, spot: 3, tag: 'Star Contributor' },
+  { minMargin: 9, spot: 4, tag: 'Solid Contributor' },
+  { minMargin: 6, spot: 5, tag: 'Rotation Piece' },
+  { minMargin: 4, spot: 6, tag: 'Bench — Knocking on the Door' },
+  { minMargin: 2, spot: 7, tag: 'Bench — Developing' },
+  { minMargin: 1, spot: 8, tag: 'Bench — Long Shot' },
+  { minMargin: 0, spot: 9, tag: 'Walk-On Tier' },
 ];
 
 export const LAST_ROSTER_ROLE = ROSTER_ROLE_BREAKPOINTS[ROSTER_ROLE_BREAKPOINTS.length - 1];
@@ -110,7 +125,16 @@ export function evaluateSchool(exposure, school) {
 }
 
 export function evaluateAllSchools(exposure, colleges = COLLEGES) {
-  return colleges.map((school) => evaluateSchool(exposure, school));
+  const evaluations = colleges.map((school) => evaluateSchool(exposure, school));
+  const guaranteed = evaluations
+    .filter((evaluation) => evaluation.band === 'guaranteed')
+    .sort((a, b) => a.school.prestigeRank - b.school.prestigeRank);
+  guaranteed.slice(GUARANTEED_OFFER_CAP).forEach((evaluation) => {
+    evaluation.band = 'out-of-range';
+    evaluation.reason = 'guaranteed-cap';
+    delete evaluation.rosterRole;
+  });
+  return evaluations;
 }
 
 // --- Recruiting board (pinning) --------------------------------------------

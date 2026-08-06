@@ -1,9 +1,11 @@
 import React from 'react';
 import { Modal, Pressable, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { DevExposureSlider } from './DevExposureSlider';
 
 export function ScreenRenderer({ viewModel, styles, actions }) {
   const { restart, step, continueFromSummary, continueFromCollegeSummary, goBack } = actions;
   const [regionMenuOpen, setRegionMenuOpen] = React.useState(false);
+  const [boardTab, setBoardTab] = React.useState('locked');
   const regions = [
     'Great Lakes',
     'Metro',
@@ -524,46 +526,118 @@ export function ScreenRenderer({ viewModel, styles, actions }) {
             <Text style={styles.title}>{r.phase === 'board' ? 'Build Your Board' : 'Your Offers'}</Text>
             <Text style={styles.subtitle}>Scout exposure: {r.exposure} / 100</Text>
           </View>
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-            {r.phase === 'board' ? (
-              <View>
-                <Text style={styles.sectionTitle}>GUARANTEED OFFERS ({r.guaranteedCount})</Text>
-                {r.guaranteedRows.length === 0 ? (
-                  <Text style={styles.challengeSub}>No guaranteed offers yet — pin some reach schools below to gamble on one.</Text>
-                ) : (
-                  r.guaranteedRows.map((row) => (
-                    <View key={row.id} style={[styles.scheduleRow, { backgroundColor: '#181b21', borderColor: '#242833' }]}>
-                      <View style={styles.rowTextWrap}>
-                        <Text style={styles.rowTitle}>{row.name}</Text>
-                        <Text style={styles.rowSub}>{row.conf} · #{row.prestigeRank} nationally</Text>
-                      </View>
-                      <Text style={styles.blueText}>{row.slotLabel}</Text>
-                    </View>
-                  ))
-                )}
-
-                <Text style={styles.sectionTitle}>REACH SCHOOLS · PIN {r.pinnedCount}/{r.maxPins}</Text>
-                <Text style={styles.entryHint}>Top {r.reachShownCount} of {r.reachTotalCount} programs within reach, by odds of turning into an offer. Pin up to {r.maxPins} to gamble on them.</Text>
-                {r.reachRows.map((row) => (
-                  <TouchableOpacity
-                    key={row.id}
-                    activeOpacity={0.8}
-                    onPress={row.onToggle}
-                    style={[styles.scheduleRow, row.pinned ? { backgroundColor: 'rgba(232,80,42,.14)', borderColor: '#e8502a' } : { backgroundColor: '#181b21', borderColor: '#242833' }]}
-                  >
-                    <View style={styles.rowTextWrap}>
-                      <Text style={styles.rowTitle}>{row.name}</Text>
-                      <Text style={styles.rowSub}>{row.conf} · #{row.prestigeRank} nationally</Text>
-                    </View>
-                    <Text style={[styles.scheduleResult, row.pinned && styles.blueText]}>{row.pinned ? 'PINNED' : `${row.oddsPct}%`}</Text>
-                  </TouchableOpacity>
-                ))}
-
-                <TouchableOpacity activeOpacity={0.9} style={styles.primaryButton} onPress={r.lockIn}>
-                  <Text style={styles.primaryButtonText}>Lock In Recruiting Board →</Text>
+          {r.phase === 'board' ? (
+            <View style={{ flex: 1 }}>
+              <DevExposureSlider
+                value={r.devExposureValue}
+                actual={r.devExposureActual}
+                overridden={r.devExposureOverridden}
+                onChange={r.setDevExposure}
+                onClear={r.clearDevExposure}
+                styles={styles}
+              />
+              <TouchableOpacity activeOpacity={0.9} style={styles.primaryButton} onPress={r.lockIn}>
+                <Text style={styles.primaryButtonText}>Lock In Recruiting Board →</Text>
+              </TouchableOpacity>
+              {boardTab === 'all' && r.walkOnSelectedId ? (
+                <TouchableOpacity activeOpacity={0.9} style={styles.ghostButton} onPress={r.commitWalkOn}>
+                  <Text style={styles.ghostButtonText}>Walk On to {r.walkOnSelectedName} →</Text>
+                </TouchableOpacity>
+              ) : null}
+              <View style={styles.tabRow}>
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onPress={() => setBoardTab('locked')}
+                  style={[styles.tabButton, { borderBottomColor: boardTab === 'locked' ? '#2f80ff' : 'transparent' }]}
+                >
+                  <Text style={[styles.tabText, { color: boardTab === 'locked' ? '#f2f3f5' : '#7f8792' }]}>Locked Offers ({r.guaranteedCount})</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onPress={() => setBoardTab('chance')}
+                  style={[styles.tabButton, { borderBottomColor: boardTab === 'chance' ? '#2f80ff' : 'transparent' }]}
+                >
+                  <Text style={[styles.tabText, { color: boardTab === 'chance' ? '#f2f3f5' : '#7f8792' }]}>Chance Offers ({r.pinnedCount}/{r.maxPins})</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onPress={() => setBoardTab('all')}
+                  style={[styles.tabButton, { borderBottomColor: boardTab === 'all' ? '#2f80ff' : 'transparent' }]}
+                >
+                  <Text style={[styles.tabText, { color: boardTab === 'all' ? '#f2f3f5' : '#7f8792' }]}>All Schools ({r.allCount})</Text>
                 </TouchableOpacity>
               </View>
-            ) : (
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+                {boardTab === 'locked' ? (
+                  r.guaranteedRows.length === 0 ? (
+                    <Text style={styles.challengeSub}>No guaranteed offers yet — pin some reach schools on the Chance Offers tab to gamble on one.</Text>
+                  ) : (
+                    r.guaranteedRows.map((row) => (
+                      <View key={row.id} style={[styles.scheduleRow, { backgroundColor: '#181b21', borderColor: '#242833' }]}>
+                        <View style={styles.rowTextWrap}>
+                          <Text style={styles.rowTitle}>{row.name}</Text>
+                          <Text style={styles.rowSub}>{row.conf} · #{row.prestigeRank} nationally</Text>
+                        </View>
+                        <Text style={styles.blueText}>{row.slotLabel}</Text>
+                      </View>
+                    ))
+                  )
+                ) : boardTab === 'chance' ? (
+                  <View>
+                    <Text style={styles.entryHint}>Top {r.reachShownCount} of {r.reachTotalCount} programs within reach, by odds of turning into an offer. Pin up to {r.maxPins} to gamble on them.</Text>
+                    {r.reachRows.map((row) => (
+                      <TouchableOpacity
+                        key={row.id}
+                        activeOpacity={0.8}
+                        onPress={row.onToggle}
+                        style={[styles.scheduleRow, row.pinned ? { backgroundColor: 'rgba(232,80,42,.14)', borderColor: '#e8502a' } : { backgroundColor: '#181b21', borderColor: '#242833' }]}
+                      >
+                        <View style={styles.rowTextWrap}>
+                          <Text style={styles.rowTitle}>{row.name}</Text>
+                          <Text style={styles.rowSub}>{row.conf} · #{row.prestigeRank} nationally</Text>
+                        </View>
+                        <Text style={[styles.scheduleResult, row.pinned && styles.blueText]}>{row.pinned ? 'PINNED' : `${row.oddsPct}%`}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                ) : (
+                  <View>
+                    <Text style={styles.entryHint}>Every program in the country. Not a guaranteed offer, not worth gambling a pin on? Tap any of them to walk on there directly — no need to lock in first.</Text>
+                    {r.allRows.map((row) => {
+                      const rowStyle = row.band === 'guaranteed'
+                        ? { backgroundColor: 'rgba(47,128,255,.10)', borderColor: '#2f3f5e' }
+                        : row.active
+                          ? { backgroundColor: 'rgba(232,80,42,.14)', borderColor: '#e8502a' }
+                          : row.band === 'reach'
+                            ? { backgroundColor: '#181b21', borderColor: '#242833' }
+                            : { backgroundColor: '#14161b', borderColor: '#1e2129' };
+                      const statusStyle = row.band === 'guaranteed' || row.active
+                        ? styles.blueText
+                        : row.band === 'out-of-range'
+                          ? styles.disabledText
+                          : null;
+                      return (
+                        <TouchableOpacity
+                          key={row.id}
+                          activeOpacity={row.onPress ? 0.8 : 1}
+                          disabled={!row.onPress}
+                          onPress={row.onPress || undefined}
+                          style={[styles.scheduleRow, rowStyle]}
+                        >
+                          <View style={styles.rowTextWrap}>
+                            <Text style={styles.rowTitle}>{row.name}</Text>
+                            <Text style={styles.rowSub}>{row.conf} · #{row.prestigeRank} nationally</Text>
+                          </View>
+                          <Text style={[styles.scheduleResult, statusStyle]}>{row.statusText}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+              </ScrollView>
+            </View>
+          ) : (
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
               <View>
                 <View style={styles.tabRow}>
                   <TouchableOpacity activeOpacity={0.9} onPress={() => r.setSort('prestige')} style={[styles.tabButton, { borderBottomColor: r.sort === 'prestige' ? '#2f80ff' : 'transparent' }]}>
@@ -627,8 +701,8 @@ export function ScreenRenderer({ viewModel, styles, actions }) {
                   <Text style={styles.ghostButtonText}>Start a New Career</Text>
                 </TouchableOpacity>
               </View>
-            )}
-          </ScrollView>
+            </ScrollView>
+          )}
         </View>
       );
     }
@@ -667,7 +741,7 @@ export function ScreenRenderer({ viewModel, styles, actions }) {
           <View style={styles.heroCard}>
             <Text style={styles.eyebrow}>{g.conf} · #{g.prestigeRank} NATIONALLY</Text>
             <Text style={styles.title}>{g.teamName}</Text>
-            <Text style={styles.subtitle}>Roster Spot #{g.spot} of {g.roster} · {g.record}</Text>
+            <Text style={styles.subtitle}>Roster Spot #{g.spot} of {g.roster}{g.benched ? ' · Bench' : ' · Starting Five'} · {g.record}</Text>
           </View>
           <View style={styles.tabRow}>
             {g.tabs.map((tab) => (
@@ -779,20 +853,28 @@ export function ScreenRenderer({ viewModel, styles, actions }) {
       return (
         <View style={styles.screenContent}>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-            <View style={[styles.summaryCard, { backgroundColor: s.madeTop5 ? 'rgba(232,163,60,.12)' : '#181b21', borderColor: s.madeTop5 ? '#e8a33c' : '#262a33' }]}>
-              <Text style={styles.summaryEyebrow}>{s.tournamentName.toUpperCase()} · {s.location}</Text>
-              <Text style={[styles.summaryHeadline, { color: s.madeTop5 ? '#e8a33c' : '#dfe3e9' }]}>Finished {s.rank} of {s.fieldSize}</Text>
-              <Text style={styles.summaryHint}>Your score: {s.toPar}</Text>
-            </View>
+            {s.benched ? (
+              <View style={[styles.summaryCard, { backgroundColor: '#181b21', borderColor: '#262a33' }]}>
+                <Text style={styles.summaryEyebrow}>{s.tournamentName.toUpperCase()} · {s.location}</Text>
+                <Text style={[styles.summaryHeadline, { color: '#dfe3e9' }]}>Didn't Make the Trip</Text>
+                <Text style={styles.summaryHint}>{s.hint}</Text>
+              </View>
+            ) : (
+              <View style={[styles.summaryCard, { backgroundColor: s.madeTop5 ? 'rgba(232,163,60,.12)' : '#181b21', borderColor: s.madeTop5 ? '#e8a33c' : '#262a33' }]}>
+                <Text style={styles.summaryEyebrow}>{s.tournamentName.toUpperCase()} · {s.location}</Text>
+                <Text style={[styles.summaryHeadline, { color: s.madeTop5 ? '#e8a33c' : '#dfe3e9' }]}>Finished {s.rank} of {s.fieldSize}</Text>
+                <Text style={styles.summaryHint}>Your score: {s.toPar}</Text>
+              </View>
+            )}
             <View style={styles.matchCard}>
               <Text style={styles.sectionTitle}>LEADERBOARD</Text>
               {s.board.map((row) => (
-                <View key={`${row.name}-${row.pos}`} style={[styles.leaderRow, row.you ? { backgroundColor: 'rgba(232,80,42,.16)', borderColor: '#e8502a' } : { backgroundColor: '#161920', borderColor: '#20232b' }]}>
-                  <Text style={[styles.leaderPos, { color: row.you ? '#f08464' : '#7f8792' }]}>{row.pos}</Text>
+                <View key={`${row.name}-${row.pos}`} style={[styles.leaderRow, (row.you || row.mine) ? { backgroundColor: 'rgba(232,80,42,.16)', borderColor: '#e8502a' } : { backgroundColor: '#161920', borderColor: '#20232b' }]}>
+                  <Text style={[styles.leaderPos, { color: (row.you || row.mine) ? '#f08464' : '#7f8792' }]}>{row.pos}</Text>
                   <View style={styles.rowTextWrap}>
-                    <Text style={[styles.rowTitle, { color: row.you ? '#ffb59e' : '#e5e8ed' }]}>{row.you ? 'You' : row.name}</Text>
+                    <Text style={[styles.rowTitle, { color: (row.you || row.mine) ? '#ffb59e' : '#e5e8ed' }]}>{row.you ? 'You' : row.name}</Text>
                   </View>
-                  <Text style={[styles.leaderScore, { color: row.you ? '#ff8a5c' : '#9aa0ab' }]}>{row.score}</Text>
+                  <Text style={[styles.leaderScore, { color: (row.you || row.mine) ? '#ff8a5c' : '#9aa0ab' }]}>{row.score}</Text>
                 </View>
               ))}
             </View>
@@ -836,7 +918,9 @@ export function ScreenRenderer({ viewModel, styles, actions }) {
                       <Text style={styles.rowTitle}>{row.name}</Text>
                       <Text style={styles.rowSub}>{row.location}</Text>
                     </View>
-                    <Text style={styles.scheduleResult}>{row.rank} of {row.fieldSize} · {row.toPar}</Text>
+                    <Text style={styles.scheduleResult}>
+                      {row.benched ? `DNP · benched${row.bestName ? ` (${row.bestName} ${row.bestRank})` : ''}` : `${row.rank} of ${row.fieldSize} · ${row.toPar}`}
+                    </Text>
                   </View>
                 ))}
               </View>

@@ -10,13 +10,30 @@
 // course difficulty is derived from the committed team's own strength rather
 // than the real course. Good enough to play; easy to replace piece by piece
 // as better data shows up.
-import { hash, rng, gauss, MATE_NAMES, OPP_NAMES, NINE_PARS } from './gameData';
+import { hash, rng, gauss, MATE_NAMES, OPP_NAMES, NINE_PARS, depthChartSeeding } from './gameData';
 import { TOURNAMENTS } from './tournaments';
 import { COLLEGES } from './recruiting';
 
 export const SEASON_LENGTH = 6;
-export const ROSTER_SIZE = 5; // standard NCAA counting lineup
+export const ROSTER_SIZE = 9; // full depth chart, recruiting pool + bench included
+export const LINEUP_SIZE = 5; // standard NCAA counting lineup — only spots 1-LINEUP_SIZE travel to (and play) a given tournament
 export const FIELD_SIZE = 10; // simulated opponent golfers per event
+
+// Which of your teammates are in this week's traveling squad, by current
+// depth-chart seeding. Whether the player themself travels is a separate
+// check (see isBenched) — this only covers the other ROSTER_SIZE-1 spots.
+export function travelingTeammates(teammates, spot, roster = ROSTER_SIZE, lineupSize = LINEUP_SIZE) {
+  const seeding = depthChartSeeding(teammates, spot, roster);
+  return teammates.filter((_, index) => seeding[index] <= lineupSize);
+}
+
+// Spots below the counting lineup are bench — you're on the roster, but you
+// don't travel (or play) this week. The only way off the bench is a practice
+// challenge between tournaments; a played round can't move you if you never
+// got to play it.
+export function isBenched(spot, lineupSize = LINEUP_SIZE) {
+  return spot > lineupSize;
+}
 
 // --- Between-round practice -------------------------------------------------
 // A 3-hole challenge between tournaments, reusing the exact three high
