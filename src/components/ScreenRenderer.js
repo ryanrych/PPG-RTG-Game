@@ -5,7 +5,7 @@ import { DevExposureSlider } from './DevExposureSlider';
 export function ScreenRenderer({ viewModel, styles, actions }) {
   const { restart, step, continueFromSummary, continueFromCollegeSummary, goBack } = actions;
   const [regionMenuOpen, setRegionMenuOpen] = React.useState(false);
-  const [boardTab, setBoardTab] = React.useState('locked');
+  const [boardTab, setBoardTab] = React.useState('featured');
   const regions = [
     'Great Lakes',
     'Metro',
@@ -544,31 +544,31 @@ export function ScreenRenderer({ viewModel, styles, actions }) {
                   <Text style={styles.ghostButtonText}>Walk On to {r.walkOnSelectedName} →</Text>
                 </TouchableOpacity>
               ) : null}
-              <View style={styles.tabRow}>
+              <View style={[styles.tabRow, { gap: 8, paddingHorizontal: 4 }]}>
                 <TouchableOpacity
                   activeOpacity={0.9}
-                  onPress={() => setBoardTab('locked')}
-                  style={[styles.tabButton, { borderBottomColor: boardTab === 'locked' ? '#2f80ff' : 'transparent' }]}
+                  onPress={() => setBoardTab('featured')}
+                  style={[styles.tabButton, { paddingHorizontal: 4, borderBottomColor: boardTab === 'featured' ? '#2f80ff' : 'transparent' }]}
                 >
-                  <Text style={[styles.tabText, { color: boardTab === 'locked' ? '#f2f3f5' : '#7f8792' }]}>Locked Offers ({r.guaranteedCount})</Text>
+                  <Text style={[styles.tabText, { fontSize: 12.5, textAlign: 'center', color: boardTab === 'featured' ? '#f2f3f5' : '#7f8792' }]}>Featured Offers ({r.guaranteedCount})</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   activeOpacity={0.9}
                   onPress={() => setBoardTab('chance')}
-                  style={[styles.tabButton, { borderBottomColor: boardTab === 'chance' ? '#2f80ff' : 'transparent' }]}
+                  style={[styles.tabButton, { paddingHorizontal: 4, borderBottomColor: boardTab === 'chance' ? '#2f80ff' : 'transparent' }]}
                 >
-                  <Text style={[styles.tabText, { color: boardTab === 'chance' ? '#f2f3f5' : '#7f8792' }]}>Chance Offers ({r.pinnedCount}/{r.maxPins})</Text>
+                  <Text style={[styles.tabText, { fontSize: 12.5, textAlign: 'center', color: boardTab === 'chance' ? '#f2f3f5' : '#7f8792' }]}>Chance Offers ({r.pinnedCount}/{r.maxPins})</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   activeOpacity={0.9}
                   onPress={() => setBoardTab('all')}
-                  style={[styles.tabButton, { borderBottomColor: boardTab === 'all' ? '#2f80ff' : 'transparent' }]}
+                  style={[styles.tabButton, { paddingHorizontal: 4, borderBottomColor: boardTab === 'all' ? '#2f80ff' : 'transparent' }]}
                 >
-                  <Text style={[styles.tabText, { color: boardTab === 'all' ? '#f2f3f5' : '#7f8792' }]}>All Schools ({r.allCount})</Text>
+                  <Text style={[styles.tabText, { fontSize: 12.5, textAlign: 'center', color: boardTab === 'all' ? '#f2f3f5' : '#7f8792' }]}>All Schools ({r.allCount})</Text>
                 </TouchableOpacity>
               </View>
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-                {boardTab === 'locked' ? (
+                {boardTab === 'featured' ? (
                   r.guaranteedRows.length === 0 ? (
                     <Text style={styles.challengeSub}>No guaranteed offers yet — pin some reach schools on the Chance Offers tab to gamble on one.</Text>
                   ) : (
